@@ -80,3 +80,18 @@ def download_data(Basin, passes, continent, start_date, reach_node):
             return print("Maximum number of download attempts reached. Please try again later")
     else:
         return print("All files downloaded successfully")
+
+def unzip_files_in_directory(savepath):
+    '''This function unzips all zip files in the given directory.'''
+    
+    for item in os.listdir(savepath):  # loop through items in dir
+        if item.endswith(".zip"):  # check for ".zip" extension
+            file_path = os.path.join(savepath, item)
+            try:
+                with zipfile.ZipFile(file_path, 'r') as zip_ref:  # create zipfile object
+                    zip_ref.extractall(savepath)  # extract file to dir
+                print(f"{item} unzipped successfully")
+            except zipfile.BadZipFile:
+                print(f"Error: {item} is not a valid zip file or is corrupted")
+            except Exception as e:
+                print(f"An unexpected error occurred while unzipping {item}: {e}")
