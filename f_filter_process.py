@@ -56,7 +56,7 @@ def call_file():
     return river_dict
 
 
-def valid_pairs(basin_data, reach_node,q_b_value):
+def valid_pairs(basin_data, reach_node,q_b_value,dark_value):
 
     """
     Removes any key-value pairs in the basin dictionary selected where the 'width' < 99 or None,  or 'wse' 
@@ -79,9 +79,9 @@ def valid_pairs(basin_data, reach_node,q_b_value):
         else:
             bit_list = inner_dict.get('node_q_b', [])
 
-        # Identify indices where 'width' or 'wse' are None or negative or 'node_reach_q_b' >= 16
+        # Identify indices where 'width' or 'wse' are None or negative or 'node_reach_q_b' >= 16/8 (or 'reach_q_b' >= 16/8)
         indices_to_remove = [i for i, (w, ws, bl, dfr) in enumerate(zip(width_list, wse_list, bit_list,dark_list)) if w is None or ws is None or w < 99 or ws < 0 
-                         or bl >= q_b_value or dfr > 0.35] 
+                         or bl >= q_b_value or dfr > dark_value] 
 
         # Remove items in reverse order to avoid indexing issues
         for key in list(inner_dict.keys()):
