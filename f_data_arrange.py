@@ -62,10 +62,10 @@ def process_shape(Basin, reach_node,r_n_id):
     shapefiles = glob.glob(os.path.join(to_basins, '*.shp'))
 
     if reach_node == 'Reach':
-        columns_to_take = ['reach_id', 'p_lat', 'p_lon', 'river_name','wse','wse_u','width','width_u','xtrk_dist','reach_q','reach_q_b',
+        columns_to_take = ['reach_id','time_str', 'p_lat', 'p_lon', 'river_name','wse','wse_u','width','width_u','node_dist','xtrk_dist','reach_q','reach_q_b',
                     'dark_frac','ice_clim_f','ice_dyn_f','xovr_cal_q','p_width','p_wid_var','p_dist_out', 'p_length'] # Define the columns to take from the shapefile
     else:
-        columns_to_take = ['node_id', 'lat', 'lon', 'river_name','wse','wse_u','width','width_u','xtrk_dist','node_q','node_q_b',
+        columns_to_take = ['node_id','time_str', 'lat', 'lon', 'river_name','wse','wse_u','width','width_u','node_dist','xtrk_dist','node_q','node_q_b',
                     'dark_frac','ice_clim_f','ice_dyn_f','xovr_cal_q','p_width','p_wid_var', 'p_dist_out'] # Define the columns to take from the shapefile
     
     for shp in shapefiles:
