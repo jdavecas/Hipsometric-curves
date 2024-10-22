@@ -116,16 +116,7 @@ def valid_pairs(basin_data, reach_node,q_b_value,dark_value):
 
     # Print results
     print(f"{deleted_count} out of {total_keys} outer keys were deleted which is {deleted_count/total_keys*100:.2f}%")
-    print(basin_data)
     
-    # Print lists with more than 20 items
-    if large_lists:
-        print("Lists with more than 20 items:")
-        for key, value in large_lists.items():
-            print(f"{key}: {value}")
-    else:
-        print("No lists with more than 20 items were found.")
-
     return basin_data, summary
 
 def dynamic_threshold(cv, base_threshold):
@@ -227,16 +218,18 @@ def distance_based_filtering_auto_threshold(basin_data, reach_node, base_thresho
     return basin_data, summary
 
 
-def outliers(filtered_basin):
+def outliers(basin_data):
     """
-    Removes outliers from the basin dictionary selected. Outliers are defined as values that are more than 2 standard deviations
-    from the mean of the 'width' and 'wse' lists in the inner dictionary. If an outlier is removed from 'width' or 'wse',
-    all values in the same position in other lists are also removed. This is applied only to lists with more than 20 items.
+    Removes outliers from the basin dictionary. Outliers are values more than 2 standard deviations 
+    from the mean in 'width' and 'wse' lists. If an outlier is removed, all values in the same position
+    in other lists are also removed. This is applied only to lists with more than 20 items.
     """
     total_removed = 0  # Initialize counter for removed outliers
+    total_keys = len(basin_data.keys())  # Get the total number of keys before filtering
+    deleted_count = 0  # Initialize deleted keys count
 
-    for outer_key in list(filtered_basin.keys()):
-        inner_dict = filtered_basin[outer_key]
+    for outer_key in list(basin_data.keys()):
+        inner_dict = basin_data[outer_key]
 
         # Process only lists with more than 20 items
         for key in list(inner_dict.keys()):
@@ -264,11 +257,24 @@ def outliers(filtered_basin):
                         for k in inner_dict.keys():
                             if isinstance(inner_dict[k], list) and i < len(inner_dict[k]):
                                 inner_dict[k].pop(i)
-    
-    # Print the total number of outliers removed
-    print(f"Total number of outliers removed: {total_removed}")
 
-    return filtered_basin
+        # After outlier removal, check if there are fewer than 3 items in any list
+        if not inner_dict or all(isinstance(value, list) and len(value) < 3 for value in inner_dict.values()):
+            del basin_data[outer_key]
+            deleted_count += 1
+
+    # Calculate the remaining and deleted counts
+    remaining_count = total_keys - deleted_count
+    remaining_percent = (remaining_count / total_keys) * 100
+    deleted_percent = (deleted_count / total_keys) * 100
+
+    # Create a summary DataFrame
+    summary = pd.DataFrame([[remaining_count, deleted_count, remaining_percent, deleted_percent]], 
+                           columns=['Remaining', 'Deleted', 'Remaining %', 'Deleted %'])
+
+    # Return the updated basin_data and the summary
+    return basin_data, summary
+
 
 
 
@@ -297,7 +303,6 @@ def data(basin, ind):
     df.loc[ind, 'Remaining %'] = basin.loc[0, 'Remaining %']
     df.loc[ind, 'Deleted %'] = basin.loc[0, 'Deleted %']
     return df
-
 
 def export_dataframe(df, is_geodataframe=False):
     """
