@@ -198,7 +198,7 @@ def distance_based_filtering_auto_threshold(basin_data, reach_node, base_thresho
                         inner_dict[key].pop(i)
 
         # Step 6: If any list has fewer than 3 items, mark the outer dictionary for deletion
-        if not inner_dict or all(isinstance(value, list) and len(value) < 3 for value in inner_dict.values()):
+        if all(isinstance(value, list) and len(value) < 3 for value in inner_dict.values()):
             del basin_data[outer_key]
             deleted_count += 1
 
@@ -259,7 +259,7 @@ def outliers(basin_data):
                                 inner_dict[k].pop(i)
 
         # After outlier removal, check if there are fewer than 3 items in any list
-        if not inner_dict or all(isinstance(value, list) and len(value) < 3 for value in inner_dict.values()):
+        if all(isinstance(value, list) and len(value) < 3 for value in inner_dict.values()):
             del basin_data[outer_key]
             deleted_count += 1
 
@@ -272,8 +272,11 @@ def outliers(basin_data):
     summary = pd.DataFrame([[remaining_count, deleted_count, remaining_percent, deleted_percent]], 
                            columns=['Remaining', 'Deleted', 'Remaining %', 'Deleted %'])
 
-    # Return the updated basin_data and the summary
+    # Print results
+    print(f"{deleted_count} out of {total_keys} outer keys were deleted.")
+
     return basin_data, summary
+
 
 
 
