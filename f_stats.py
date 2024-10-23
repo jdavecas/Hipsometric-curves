@@ -120,6 +120,7 @@ def geojoin(gdf,df,reach_node='node_id'):
 def hypsometric(river, min_spearman=None):
     """
     Generates hypsometric scatter plots for randomly selected river nodes.
+    Ensures 50% of scatter plots have Spearman correlation above 0.4, and 50% below 0.39.
     Optionally filters nodes by Spearman correlation between 'width' and 'wse' if a threshold is provided.
 
     Args:
@@ -127,31 +128,37 @@ def hypsometric(river, min_spearman=None):
         min_spearman (float or None): Minimum Spearman correlation value to include a node in the plot. 
                                       If None, no filtering is applied (default: None).
     """
-    # Filter nodes based on Spearman correlation threshold if provided
-    if min_spearman is not None:
-        valid_nodes = []
-        for node_id in river:
-            node_data = river[node_id]
-            spearman_corr, _ = scipy.stats.spearmanr(node_data['width'], node_data['wse'])
-            
-            # Check if the Spearman correlation meets the minimum threshold
-            if spearman_corr >= min_spearman:
-                valid_nodes.append((node_id, spearman_corr))
-    else:
-        # If no threshold is set, all nodes are valid
-        valid_nodes = [(node_id, scipy.stats.spearmanr(river[node_id]['wse'], river[node_id]['width'])[0]) for node_id in river]
+    # Separate nodes based on Spearman correlation threshold
+    above_threshold = []
+    below_threshold = []
+    
+    for node_id in river:
+        node_data = river[node_id]
+        spearman_corr, _ = scipy.stats.spearmanr(node_data['width'], node_data['wse'])
+        
+        if spearman_corr >= 0.4:
+            above_threshold.append((node_id, spearman_corr))
+        elif spearman_corr <= 0.39:
+            below_threshold.append((node_id, spearman_corr))
 
-    # Randomly select up to 20 nodes from the valid nodes
-    random_nodes = random.sample(valid_nodes, min(len(valid_nodes), 20))
+    # Randomly select nodes for plotting, 50% from each group
+    num_above = min(len(above_threshold), 10)  # 50% from above 0.4
+    num_below = min(len(below_threshold), 10)  # 50% from below 0.39
 
-    # Create scatter plots in a 4x5 grid
+    selected_above = random.sample(above_threshold, num_above)
+    selected_below = random.sample(below_threshold, num_below)
+
+    # Combine selected nodes
+    random_nodes = selected_above + selected_below
+
+    # Create scatter plots in a 4x5 grid (up to 20 plots)
     plt.figure(figsize=(20, 15))
     for i, (node_id, spearman_corr) in enumerate(random_nodes, 1):
         node_data = river[node_id]
-    
+
         # Create subplot
         plt.subplot(4, 5, i)  # 4x5 grid for up to 20 plots
-        plt.scatter(node_data['width'], node_data['wse'], alpha=1, c="darkcyan",edgecolors='cyan', linewidths=1)
+        plt.scatter(node_data['width'], node_data['wse'], alpha=1, c="darkcyan", edgecolors='cyan', linewidths=1)
         plt.title(f"Node: {node_id}\nSpearman: {spearman_corr:.2f}")
         plt.xlabel('Width')
         plt.ylabel('WSE')
@@ -159,6 +166,7 @@ def hypsometric(river, min_spearman=None):
     # Adjust layout and display
     plt.tight_layout()
     plt.show()
+
 
 
 
