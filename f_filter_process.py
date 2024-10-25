@@ -119,104 +119,6 @@ def valid_pairs(basin_data, reach_node,q_b_value,dark_value):
     
     return basin_data, summary
 
-def dynamic_threshold(cv, base_threshold):
-    """
-    Adjusts the threshold based on the coefficient of variation (CV).
-    For high variability (CV > 1), the threshold is reduced moderately, but not too strictly.
-    For low variability (CV < 1), the threshold is increased.
-    """
-    if cv >= 1:  # High variability -> stricter threshold
-        return base_threshold * (1 - min(cv*0.6, 0.8))  # Cap reduction to avoid negative threshold
-    else:  # Low variability -> more lenient threshold
-        return base_threshold * (1 + cv)
-
-def distance_based_filtering_auto_threshold(basin_data, reach_node, base_threshold=3):
-    """
-    Applies distance-based filtering using normalization for each node or reach in the dataset, adjusting 
-    the threshold based on width variability (automated threshold based on coefficient of variation).
-    
-    Parameters:
-    - basin_data: Dictionary containing river data for nodes or reaches.
-    - reach_node: String to identify whether it is 'Reach' or 'Node'.
-    - base_threshold: Base threshold for filtering measurements based on distance to the centroid.
-    
-    Returns:
-    - filtered_basin_data: Filtered dictionary after applying distance-based normalization and filtering.
-    - summary: DataFrame with remaining and deleted key counts and percentages.
-    """
-    results_list = []  # Initialize list to store results
-    total_keys = len(basin_data.keys())
-    deleted_count = 0
-    total_removed_items = 0  # Initialize total removed items counter
-
-    for outer_key in list(basin_data.keys()):
-        inner_dict = basin_data[outer_key]
-        width_list = inner_dict.get('width', [])
-        dist_list = inner_dict.get('node_dist', [])  # Distance to centroid for nodes
-        if reach_node == 'Reach':
-            dist_list = inner_dict.get('reach_dist', [])  # Distance to centroid for reaches
-
-        # Step 1: Calculate the median width and coefficient of variation (CV) for this node/reach
-        if len(width_list) > 0:
-            median_width = pd.Series(width_list).median()
-            width_std = pd.Series(width_list).std()  # Width variability (standard deviation)
-            coefficient_of_variation = width_std / median_width if median_width > 0 else 0
-        else:
-            median_width = None
-            coefficient_of_variation = 0
-
-        # Store median width and CV in the inner dictionary
-        inner_dict['median_width'] = median_width
-        inner_dict['cv'] = coefficient_of_variation
-
-        # Step 2: Calculate dynamic threshold based on coefficient of variation
-        dynamic_threshold_value = dynamic_threshold(coefficient_of_variation, base_threshold)
-
-        # Store dynamic threshold in the inner dictionary
-        inner_dict['dynamic_threshold'] = dynamic_threshold_value
-
-        # Step 3: Normalize the node_dist or reach_dist by the median width
-        if median_width and median_width > 0:
-            normalized_dist_list = [dist / median_width if dist is not None else float('inf') for dist in dist_list]
-        else:
-            normalized_dist_list = [float('inf')] * len(dist_list)  # Mark as 'inf' if no valid width for filtering
-
-        # Store normalized distances in the inner dictionary
-        inner_dict['normalized_dist'] = normalized_dist_list
-
-        # Step 4: Identify indices to remove based on the dynamic threshold
-        indices_to_remove = [i for i, norm_dist in enumerate(normalized_dist_list) if norm_dist > dynamic_threshold_value]
-
-        # Count the number of items being removed
-        total_removed_items += len(indices_to_remove)
-
-        # Step 5: Remove items in reverse order to avoid indexing issues
-        for key in list(inner_dict.keys()):
-            if isinstance(inner_dict[key], list):
-                for i in sorted(indices_to_remove, reverse=True):
-                    if i < len(inner_dict[key]):
-                        inner_dict[key].pop(i)
-
-        # Step 6: If any list has fewer than 3 items, mark the outer dictionary for deletion
-        if all(isinstance(value, list) and len(value) < 3 for value in inner_dict.values()):
-            del basin_data[outer_key]
-            deleted_count += 1
-
-    # Step 7: Calculate remaining and deleted percentages
-    remaining_count = total_keys - deleted_count
-    remaining_percent = (remaining_count / total_keys) * 100
-    deleted_percent = (deleted_count / total_keys) * 100
-
-    # Add the result for this dataset to the list
-    results_list.append([remaining_count, deleted_count, remaining_percent, deleted_percent, total_removed_items])
-    summary = pd.DataFrame(results_list, columns=['Remaining', 'Deleted', 'Remaining %', 'Deleted %', 'Total Removed Items'])
-
-    # Print results
-    print(f"{deleted_count} out of {total_keys} outer keys were deleted, which is {deleted_percent:.2f}%.")
-    print(f"Total removed items across all nodes: {total_removed_items}")
-
-    return basin_data, summary
-
 
 def outliers(basin_data):
     """
@@ -281,10 +183,6 @@ def outliers(basin_data):
     print(f"Total list elements removed: {total_list_removed}")
 
     return basin_data, summary
-
-
-
-
 
 
 def data(basin, ind):
