@@ -227,6 +227,7 @@ def outliers(basin_data):
     total_removed = 0  # Initialize counter for removed outliers
     total_keys = len(basin_data.keys())  # Get the total number of keys before filtering
     deleted_count = 0  # Initialize deleted keys count
+    total_list_removed = 0  # Initialize counter for removed elements inside lists
 
     for outer_key in list(basin_data.keys()):
         inner_dict = basin_data[outer_key]
@@ -244,6 +245,9 @@ def outliers(basin_data):
 
                     # Identify outliers
                     outliers_indices = [i for i, value in enumerate(data_list) if abs(value - mean) > 2 * std_dev]
+
+                    # Count removed elements in the lists
+                    total_list_removed += len(outliers_indices)
 
                     # Remove outliers in reverse order to avoid indexing issues
                     num_outliers = len(outliers_indices)
@@ -274,8 +278,10 @@ def outliers(basin_data):
 
     # Print results
     print(f"{deleted_count} out of {total_keys} outer keys were deleted.")
+    print(f"Total list elements removed: {total_list_removed}")
 
     return basin_data, summary
+
 
 
 
