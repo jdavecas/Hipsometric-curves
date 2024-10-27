@@ -12,14 +12,13 @@ import matplotlib.ticker as ticker
 def S_correlation(river_dict):
     N_Spearman = {}
     spearman_count = 0
+
     for id, variables in river_dict.items():
         width_values = variables['width']
         wse_values = variables['wse']
 
         # Ensure both lists have the same length
         if len(width_values) != len(wse_values):
-            print(f"Warning: Length mismatch for node {id}. width_values has length {len(width_values)}, but wse_values has length {len(wse_values)}.")
-            # Optionally, you can skip this entry or handle it as needed
             continue
 
         paired_values = list(zip(width_values, wse_values))
@@ -33,43 +32,64 @@ def S_correlation(river_dict):
         }
         spearman_count += 1
 
-    positive_spearman_count = 0
-    negative_spearman_count = 0
-    zero_spearman_count = 0
-    spearman_above_threshold_count = 0  # Counter for correlations >= 0.4
-    spearman_above_0_6_count = 0        # New counter for correlations >= 0.6
+    # Overall counts for all nodes
+    positive_spearman_count = sum(1 for v in N_Spearman.values() if v['spearman_corr'] > 0)
+    negative_spearman_count = sum(1 for v in N_Spearman.values() if v['spearman_corr'] < 0)
+    zero_spearman_count = sum(1 for v in N_Spearman.values() if v['spearman_corr'] == 0)
+    spearman_above_threshold_count = sum(1 for v in N_Spearman.values() if v['spearman_corr'] >= 0.4)
+    spearman_above_0_6_count = sum(1 for v in N_Spearman.values() if v['spearman_corr'] >= 0.6)
 
-    # Iterate through the results dictionary
-    for node_id, result in N_Spearman.items():
-        spearman_corr = result['spearman_corr']
-    
-        if spearman_corr is not None:
-            if spearman_corr > 0:
-                positive_spearman_count += 1
-                if spearman_corr >= 0.4:
-                    spearman_above_threshold_count += 1
-                if spearman_corr >= 0.6:
-                    spearman_above_0_6_count += 1
-            elif spearman_corr < 0:
-                negative_spearman_count += 1
-            else:
-                zero_spearman_count += 1
-    
-    # Print results for each node
-    for id, result in N_Spearman.items():
-        print(f"Node {id}: Spearman Correlation = {result['spearman_corr']}, p-value = {result['p_value']}, Number of pairs = {result['num_pairs']}")
+    # Total number of nodes
+    total_nodes = positive_spearman_count + negative_spearman_count + zero_spearman_count
 
-    # Display the total counts
+    # Display summary counts
+    print(f"Total number of nodes: {total_nodes}")
     print(f"Number of positive Spearman correlations: {positive_spearman_count}")
     print(f"Number of negative Spearman correlations: {negative_spearman_count}")
     print(f"Number of zero Spearman correlations: {zero_spearman_count}")
     print(f"Number of Spearman correlations >= 0.4: {spearman_above_threshold_count}")
     print(f"Number of Spearman correlations >= 0.6: {spearman_above_0_6_count}")
 
-    N_Spearman_df = pd.DataFrame.from_dict(N_Spearman.copy(), orient='index')
-    N_Spearman_df = N_Spearman_df.reset_index()
-    # Display the DataFrame
+    # Track and display counts for nodes with more than 10 observations
+    track_spearman_above_10(N_Spearman)
+
+    # Convert dictionary to DataFrame for storage
+    N_Spearman_df = pd.DataFrame.from_dict(N_Spearman, orient='index').reset_index()
     return N_Spearman_df
+
+def track_spearman_above_10(N_Spearman):
+    nodes_above_10_observations = 0
+    positive_above_10 = 0
+    negative_above_10 = 0
+    zero_above_10 = 0
+    above_0_4_above_10 = 0
+    above_0_6_above_10 = 0
+
+    for result in N_Spearman.values():
+        spearman_corr = result['spearman_corr']
+        num_pairs = result['num_pairs']
+        
+        # Track counts for nodes with more than 10 observations
+        if num_pairs > 10:
+            nodes_above_10_observations += 1
+            if spearman_corr > 0:
+                positive_above_10 += 1
+                if spearman_corr >= 0.4:
+                    above_0_4_above_10 += 1
+                if spearman_corr >= 0.6:
+                    above_0_6_above_10 += 1
+            elif spearman_corr < 0:
+                negative_above_10 += 1
+            else:
+                zero_above_10 += 1
+
+    # Display counts for nodes with more than 10 observations
+    print(f"Number of nodes with more than 10 observations: {nodes_above_10_observations}")
+    print(f"Number of positive Spearman correlations with >10 observations: {positive_above_10}")
+    print(f"Number of negative Spearman correlations with >10 observations: {negative_above_10}")
+    print(f"Number of zero Spearman correlations with >10 observations: {zero_above_10}")
+    print(f"Number of Spearman correlations >= 0.4 with >10 observations: {above_0_4_above_10}")
+    print(f"Number of Spearman correlations >= 0.6 with >10 observations: {above_0_6_above_10}")
 
 
 def plot_multiple_cdfs(df, river, min_num_pairs=0, max_num_pairs=None):
@@ -124,7 +144,7 @@ def geojoin(gdf,df,reach_node='node_id'):
 
     return merged_gdf
 
-def hypsometric(river, min_spearman=None):
+def hypsometric(river, min_spearman=None, min_obs=0, show_p_value=True):
     """
     Generates hypsometric scatter plots for randomly selected river nodes.
     Ensures 50% of scatter plots have Spearman correlation above 0.4, and 50% below 0.39.
@@ -134,6 +154,8 @@ def hypsometric(river, min_spearman=None):
         river (dict): Dictionary containing node data with 'width' and 'wse' keys.
         min_spearman (float or None): Minimum Spearman correlation value to include a node in the plot. 
                                       If None, no filtering is applied (default: None).
+        min_obs (int): Minimum number of observations required to display a scatter plot for a node (default: 0).
+        show_p_value (bool): If True, displays the p-value on each scatter plot (default: True).
     """
     # Separate nodes based on Spearman correlation threshold
     above_threshold = []
@@ -141,12 +163,15 @@ def hypsometric(river, min_spearman=None):
     
     for node_id in river:
         node_data = river[node_id]
-        spearman_corr, _ = scipy.stats.spearmanr(node_data['width'], node_data['wse'])
+        if len(node_data['width']) < min_obs:
+            continue  # Skip nodes with fewer observations than min_obs
+            
+        spearman_corr, p_value = scipy.stats.spearmanr(node_data['width'], node_data['wse'])
         
         if spearman_corr >= 0.4:
-            above_threshold.append((node_id, spearman_corr))
+            above_threshold.append((node_id, spearman_corr, p_value))
         elif spearman_corr <= 0.39:
-            below_threshold.append((node_id, spearman_corr))
+            below_threshold.append((node_id, spearman_corr, p_value))
 
     # Randomly select nodes for plotting, 50% from each group
     num_above = min(len(above_threshold), 10)  # 50% from above 0.4
@@ -160,15 +185,19 @@ def hypsometric(river, min_spearman=None):
 
     # Create scatter plots in a 4x5 grid (up to 20 plots)
     plt.figure(figsize=(20, 15))
-    for i, (node_id, spearman_corr) in enumerate(random_nodes, 1):
+    for i, (node_id, spearman_corr, p_value) in enumerate(random_nodes, 1):
         node_data = river[node_id]
 
         # Create subplot
         plt.subplot(4, 5, i)  # 4x5 grid for up to 20 plots
         plt.scatter(node_data['width'], node_data['wse'], alpha=1, c="darkcyan", edgecolors='cyan', linewidths=1)
-        plt.title(f"Node: {node_id}\nSpearman: {spearman_corr:.2f}")
+        plt.title(f"Node: {node_id}\nSpearman: {spearman_corr:.2f}", fontsize=10)
         plt.xlabel('Width')
         plt.ylabel('WSE')
+
+        # Display p-value in smaller font size if show_p_value is True
+        if show_p_value:
+            plt.text(0.05, 0.9, f"p-value: {p_value:.3f}", ha='left', va='center', transform=plt.gca().transAxes, fontsize=8, color="gray")
 
     # Adjust layout and display
     plt.tight_layout()
