@@ -31,12 +31,13 @@ def S_correlation(river_dict):
             'p_value': p_value,
             'num_pairs': num_pairs
         }
-        spearman_count =+ 1
+        spearman_count += 1
 
     positive_spearman_count = 0
     negative_spearman_count = 0
     zero_spearman_count = 0
-    spearman_above_threshold_count = 0  # New counter for correlations >= 0.55
+    spearman_above_threshold_count = 0  # Counter for correlations >= 0.4
+    spearman_above_0_6_count = 0        # New counter for correlations >= 0.6
 
     # Iterate through the results dictionary
     for node_id, result in N_Spearman.items():
@@ -47,23 +48,29 @@ def S_correlation(river_dict):
                 positive_spearman_count += 1
                 if spearman_corr >= 0.4:
                     spearman_above_threshold_count += 1
+                if spearman_corr >= 0.6:
+                    spearman_above_0_6_count += 1
             elif spearman_corr < 0:
                 negative_spearman_count += 1
             else:
                 zero_spearman_count += 1
     
+    # Print results for each node
     for id, result in N_Spearman.items():
         print(f"Node {id}: Spearman Correlation = {result['spearman_corr']}, p-value = {result['p_value']}, Number of pairs = {result['num_pairs']}")
-        # Display the total counts
+
+    # Display the total counts
     print(f"Number of positive Spearman correlations: {positive_spearman_count}")
     print(f"Number of negative Spearman correlations: {negative_spearman_count}")
     print(f"Number of zero Spearman correlations: {zero_spearman_count}")
     print(f"Number of Spearman correlations >= 0.4: {spearman_above_threshold_count}")
+    print(f"Number of Spearman correlations >= 0.6: {spearman_above_0_6_count}")
 
     N_Spearman_df = pd.DataFrame.from_dict(N_Spearman.copy(), orient='index')
     N_Spearman_df = N_Spearman_df.reset_index()
     # Display the DataFrame
     return N_Spearman_df
+
 
 def plot_multiple_cdfs(df, river, min_num_pairs=0, max_num_pairs=None):
     # Ensure the num_pairs column is treated as integers
