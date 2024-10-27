@@ -183,7 +183,7 @@ def profiles(river1, river2=None, river3=None):
     # First profile
     if river1 is not None:
         grouped1 = river1.groupby('p_dist_out')['width'].agg(['min', 'max', 'median']).reset_index()
-        plt.fill_between(grouped1['p_dist_out'], grouped1['min'], grouped1['max'], color='b', alpha=0.3, label='Profile 16 bits Width Range')
+        plt.fill_between(grouped1['p_dist_out'], grouped1['min'], grouped1['max'], color='b', alpha=0.3, label='Profile 8 bits - dark water fraction 0.30')
        # plt.plot(grouped1['p_dist_out'], grouped1['median'], color='b', linestyle='-', label='Profile 1 Median')
     
     # Second profile
