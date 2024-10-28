@@ -55,7 +55,7 @@ def S_correlation(river_dict):
 
     # Convert dictionary to DataFrame for storage
     N_Spearman_df = pd.DataFrame.from_dict(N_Spearman, orient='index').reset_index()
-    return N_Spearman_df
+    return N_Spearman, N_Spearman_df
 
 def track_spearman_above_10(N_Spearman):
     nodes_above_10_observations = 0
@@ -90,6 +90,32 @@ def track_spearman_above_10(N_Spearman):
     print(f"Number of zero Spearman correlations with >10 observations: {zero_above_10}")
     print(f"Number of Spearman correlations >= 0.4 with >10 observations: {above_0_4_above_10}")
     print(f"Number of Spearman correlations >= 0.6 with >10 observations: {above_0_6_above_10}")
+
+def best_tradeoff(N_Spearman, min_pairs=5, max_pairs=50, step=5):
+    best_tradeoff = None
+    best_ratio = 0
+    
+    for threshold in range(min_pairs, max_pairs + 1, step):
+        # Count nodes meeting the pair threshold and Spearman >= 0.4
+        count_above_threshold = sum(1 for v in N_Spearman.values() if v['num_pairs'] >= threshold and v['spearman_corr'] >= 0.4)
+        total_count = sum(1 for v in N_Spearman.values() if v['num_pairs'] >= threshold)
+        
+        # Calculate ratio of nodes with Spearman >= 0.4 to total nodes above pair threshold
+        if total_count > 0:
+            ratio = count_above_threshold / total_count
+            if ratio > best_ratio:
+                best_ratio = ratio
+                best_tradeoff = (threshold, count_above_threshold, total_count, ratio)
+    
+    if best_tradeoff:
+        threshold, count_above_threshold, total_count, ratio = best_tradeoff
+        print(f"Best trade-off at threshold {threshold} pairs:")
+        print(f"  Nodes with Spearman >= 0.4: {count_above_threshold}")
+        print(f"  Total nodes meeting pair threshold: {total_count}")
+        print(f"  Ratio: {ratio:.2f}")
+    else:
+        print("No valid trade-off found in the specified range.")
+
 
 
 def plot_multiple_cdfs(df, river, min_num_pairs=0, max_num_pairs=None):
@@ -252,4 +278,97 @@ def profiles(river1, river2=None, river3=None):
     plt.legend()
     plt.show()
 
+def width_CV_cdf(data, node_col='node_id', width_col='width', title='CDF of River Width Variability'):
+    """
+    Plots the cumulative distribution function (CDF) of river width variability 
+    based on the coefficient of variation (CV) for each river node.
 
+    Parameters:
+    - data (pd.DataFrame): DataFrame containing river nodes and widths.
+    - node_col (str): Column name for river node identifiers.
+    - width_col (str): Column name for river width measurements.
+    - title (str): Title for the plot.
+
+    Returns:
+    - None
+    """
+    # Calculate mean and standard deviation of width for each node
+    width_stats = data.groupby(node_col)[width_col].agg(['mean', 'std']).reset_index()
+    width_stats['cv'] = width_stats['std'] / width_stats['mean']  # Coefficient of Variation (CV)
+    
+    # Remove any NaN or inf values in CV (e.g., if mean is 0)
+    width_stats = width_stats.replace([np.inf, -np.inf], np.nan).dropna(subset=['cv'])
+    
+    # Sort CV values for CDF
+    sorted_cv = np.sort(width_stats['cv'])
+    cdf = np.arange(1, len(sorted_cv) + 1) / len(sorted_cv)
+    
+    # Plot the CDF
+    plt.figure(figsize=(8, 6))
+    plt.plot(sorted_cv, cdf, marker='.', linestyle='none')
+    plt.xlabel('Coefficient of Variation (CV)')
+    plt.ylabel('Cumulative Probability')
+    plt.title(title)
+    plt.grid(True)
+    plt.show()
+
+def plot_w_variability_cdfs(data, node_col='node_id', width_col='width', cv_threshold=1.0, min_observations=10):
+    """
+    Plots the cumulative distribution functions (CDFs) of river width variability 
+    for 20 randomly selected nodes with more than `min_observations` measurements.
+    Also, counts the number of nodes with CV greater than the specified threshold.
+
+    Parameters:
+    - data (pd.DataFrame): DataFrame containing river nodes and widths.
+    - node_col (str): Column name for river node identifiers.
+    - width_col (str): Column name for river width measurements.
+    - cv_threshold (float): CV threshold to check against.
+    - min_observations (int): Minimum number of observations required per node.
+
+    Returns:
+    - int: Number of nodes with CV greater than the specified threshold.
+    """
+    # Filter nodes with more than the minimum required observations
+    node_counts = data[node_col].value_counts()
+    valid_nodes = node_counts[node_counts > min_observations].index
+    filtered_data = data[data[node_col].isin(valid_nodes)]
+    
+    # Calculate mean and standard deviation of width for each valid node
+    width_stats = filtered_data.groupby(node_col)[width_col].agg(['mean', 'std', 'count']).reset_index()
+    width_stats['cv'] = width_stats['std'] / width_stats['mean']  # Coefficient of Variation (CV)
+    
+    # Remove any NaN or infinite CV values
+    width_stats = width_stats.replace([np.inf, -np.inf], np.nan).dropna(subset=['cv'])
+    
+    # Count nodes where CV is greater than the specified threshold
+    count_above_threshold = (width_stats['cv'] > cv_threshold).sum()
+    
+    # Randomly select 20 nodes for plotting
+    selected_nodes = width_stats.sample(n=20, random_state=42)
+    
+    # Plot CDFs in a 5x4 grid
+    fig, axes = plt.subplots(5, 4, figsize=(15, 12), sharex=True, sharey=True)
+    axes = axes.flatten()
+
+    for i, (ax, row) in enumerate(zip(axes, selected_nodes.itertuples())):
+        node_id = getattr(row, node_col)  # Access node ID dynamically
+        node_data = filtered_data[filtered_data[node_col] == node_id][width_col]
+        
+        # Sort widths for CDF
+        sorted_widths = np.sort(node_data)
+        cdf = np.arange(1, len(sorted_widths) + 1) / len(sorted_widths)
+        
+        # Plot CDF for the current node
+        ax.plot(sorted_widths, cdf, marker='.', linestyle='none')
+        ax.set_title(f'Node {node_id} (CV={row.cv:.2f})')
+        ax.grid(True)
+    
+    # Adjust layout
+    plt.suptitle(f'CDFs of River Width Variability for 20 Random Nodes\nNodes with CV > {cv_threshold}: {count_above_threshold}', fontsize=16)
+    plt.xlabel('Width')
+    plt.ylabel('Cumulative Probability')
+    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+    plt.show()
+    
+    # Return the count of nodes above CV threshold
+    return count_above_threshold
