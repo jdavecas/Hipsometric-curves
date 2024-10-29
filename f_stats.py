@@ -278,22 +278,28 @@ def profiles(river1, river2=None, river3=None):
     plt.legend()
     plt.show()
 
-def width_CV_cdf(data, node_col='node_id', width_col='width', title='CDF of River Width Variability'):
+def width_CV_cdf(data, node_col='node_id', width_col='width', title='CDF of River Width Variability', min_observations=10):
     """
     Plots the cumulative distribution function (CDF) of river width variability 
-    based on the coefficient of variation (CV) for each river node.
+    based on the coefficient of variation (CV) for each river node with a minimum number of observations.
 
     Parameters:
     - data (pd.DataFrame): DataFrame containing river nodes and widths.
     - node_col (str): Column name for river node identifiers.
     - width_col (str): Column name for river width measurements.
     - title (str): Title for the plot.
+    - min_observations (int): Minimum number of observations required per node.
 
     Returns:
     - None
     """
-    # Calculate mean and standard deviation of width for each node
-    width_stats = data.groupby(node_col)[width_col].agg(['mean', 'std']).reset_index()
+    # Filter nodes with more than the minimum required observations
+    node_counts = data[node_col].value_counts()
+    valid_nodes = node_counts[node_counts > min_observations].index
+    filtered_data = data[data[node_col].isin(valid_nodes)]
+    
+    # Calculate mean and standard deviation of width for each valid node
+    width_stats = filtered_data.groupby(node_col)[width_col].agg(['mean', 'std']).reset_index()
     width_stats['cv'] = width_stats['std'] / width_stats['mean']  # Coefficient of Variation (CV)
     
     # Remove any NaN or inf values in CV (e.g., if mean is 0)
@@ -372,3 +378,50 @@ def plot_w_variability_cdfs(data, node_col='node_id', width_col='width', cv_thre
     
     # Return the count of nodes above CV threshold
     return count_above_threshold
+
+"""
+def plot_w_variability_all_nodes(data, node_col='node_id', width_col='width', min_observations=10):
+ 
+    Plots the cumulative distribution functions (CDFs) of river width variability 
+    based on the coefficient of variation (CV) for each river node with more than `min_observations` measurements.
+
+    Parameters:
+    - data (pd.DataFrame): DataFrame containing river nodes and widths.
+    - node_col (str): Column name for river node identifiers.
+    - width_col (str): Column name for river width measurements.
+    - min_observations (int): Minimum number of observations required per node.
+
+    Returns:
+    - None
+  
+    # Filter nodes with more than the minimum required observations
+    node_counts = data[node_col].value_counts()
+    valid_nodes = node_counts[node_counts > min_observations].index
+    filtered_data = data[data[node_col].isin(valid_nodes)]
+    
+    # Get unique valid nodes
+    unique_nodes = filtered_data[node_col].unique()
+
+    # Set up the plot
+    plt.figure(figsize=(10, 8))
+
+    for node in unique_nodes:
+        # Filter data for the current node
+        node_data = filtered_data[filtered_data[node_col] == node]
+
+        # Calculate mean and standard deviation of width for the current node
+        width_stats = node_data[width_col].agg(['mean', 'std'])
+        cv = width_stats['std'] / width_stats['mean'] if width_stats['mean'] > 0 else np.nan
+
+        # Only plot if the CV is valid
+        if not np.isnan(cv):
+            # Plot CDF
+            plt.axvline(cv, linestyle='--', alpha=0.7)
+
+    plt.xlabel('Coefficient of Variation (CV)')
+    plt.ylabel('Cumulative Probability')
+    plt.title('CDFs of River Width Variability for Nodes with More than 10 Observations')
+    plt.grid(True)
+    plt.show()
+"""
+
