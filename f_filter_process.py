@@ -55,13 +55,17 @@ def call_file():
     
     return river_dict
 
-
-def valid_pairs(basin_data, reach_node,q_b_value,dark_value):
-
+def valid_pairs(basin_data, reach_node, q_b_value, dark_value):
     """
-    Removes any key-value pairs in the basin dictionary selected where the 'width' < 99 or None,  or 'wse' 
-    values are None or negative, or 'node_reach_q_b' >= 16, and removes any keys where the inner dictionary is empty
-    or has lists with fewer than 3 items.
+    Removes any key-value pairs in the basin dictionary selected where:
+    - 'width' < 99 or None
+    - 'wse' values are None or negative
+    - 'node_reach_q_b' >= q_b_value
+    - 'dark_frac' > dark_value
+    - 'node_dist' is None
+    - the outer key's last digit is not 1
+    
+    Any outer dictionary where all lists have fewer than 3 items is also removed.
     """
     results_list = []  # Initialize list to store results
     total_keys = len(basin_data.keys())
@@ -69,20 +73,28 @@ def valid_pairs(basin_data, reach_node,q_b_value,dark_value):
     large_lists = {}
     
     for outer_key in list(basin_data.keys()):
+        # Check if the last digit of the outer_key is '1'
+        if str(outer_key)[-1] != '1':
+            del basin_data[outer_key]
+            deleted_count += 1
+            continue  # Skip to the next outer_key
+        
         inner_dict = basin_data[outer_key]
         width_list = inner_dict.get('width', [])
         wse_list = inner_dict.get('wse', [])
-        dark_list = inner_dict.get('dark_frac',[])
-        node_list = inner_dict.get('node_dist',[])
+        dark_list = inner_dict.get('dark_frac', [])
+        node_list = inner_dict.get('node_dist', [])
 
         if reach_node == 'Reach':
             bit_list = inner_dict.get('reach_q_b', [])
         else:
             bit_list = inner_dict.get('node_q_b', [])
 
-        # Identify indices where 'width' or 'wse' are None or negative or 'node_reach_q_b' >= 16/8 (or 'reach_q_b' >= 16/8)
-        indices_to_remove = [i for i, (w, ws, bl, dfr, nl) in enumerate(zip(width_list, wse_list, bit_list,dark_list,node_list)) if w is None or ws is None or w < 99 or ws < 0 
-                         or bl >= q_b_value or dfr > dark_value or nl is None] 
+        # Identify indices to remove based on criteria
+        indices_to_remove = [
+            i for i, (w, ws, bl, dfr, nl) in enumerate(zip(width_list, wse_list, bit_list, dark_list, node_list))
+            if w is None or ws is None or w < 99 or ws < 0 or bl >= q_b_value or dfr > dark_value or nl is None
+        ]
 
         # Remove items in reverse order to avoid indexing issues
         for key in list(inner_dict.keys()):
@@ -91,11 +103,12 @@ def valid_pairs(basin_data, reach_node,q_b_value,dark_value):
                     if i < len(inner_dict[key]):
                         inner_dict[key].pop(i)
 
-    # If any list has fewer than 3 items, mark the outer dictionary for deletion
+        # Remove the outer key if lists have fewer than 3 items
+        for key in list(inner_dict.keys()):
             if isinstance(inner_dict[key], list) and len(inner_dict[key]) < 3:
                 del inner_dict[key]
 
-    # Check if the inner dictionary is empty after removals or has lists with fewer than 3 items
+        # Check if the inner dictionary is empty or has insufficient items
         if not inner_dict or all(isinstance(value, list) and len(value) < 3 for value in inner_dict.values()):
             del basin_data[outer_key]
             deleted_count += 1
@@ -115,7 +128,7 @@ def valid_pairs(basin_data, reach_node,q_b_value,dark_value):
     summary = pd.DataFrame(results_list, columns=['Remaining', 'Deleted', 'Remaining %', 'Deleted %'])
 
     # Print results
-    print(f"{deleted_count} out of {total_keys} outer keys were deleted which is {deleted_count/total_keys*100:.2f}%")
+    print(f"{deleted_count} out of {total_keys} outer keys were deleted which is {deleted_percent:.2f}%")
     
     return basin_data, summary
 
