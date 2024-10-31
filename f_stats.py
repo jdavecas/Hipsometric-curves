@@ -424,4 +424,39 @@ def plot_w_variability_all_nodes(data, node_col='node_id', width_col='width', mi
     plt.grid(True)
     plt.show()
 """
+def profile_cv(dataset):
+    plt.figure(figsize=(15, 6))
+    
+    # Calculate the coefficient of variation for nodes with more than 10 observations
+    grouped = dataset.groupby('p_dist_out')['width'].agg(['mean', 'std', 'count']).reset_index()
+    grouped = grouped[grouped['count'] > 10]  # Filter nodes with more than 10 observations
+    grouped['cv'] = grouped['std'] / grouped['mean']  # Calculate coefficient of variation (CV)
+    
+    # Plot CV against 'p_dist_out'
+    plt.plot(grouped['p_dist_out'], grouped['cv'], color='b', linestyle='-', label='Coefficient of Variation (CV)')
+    
+    # Common plotting elements
+    plt.autoscale()
+    plt.xlabel('Distance from the outlet (m)')
+    plt.ylabel('Coefficient of Variation (CV)')
+    plt.title("Profile of Coefficient of Variation (CV) vs Distance to Outlet")
+    plt.grid(which='both', linestyle='--', linewidth=0.3)
+    plt.minorticks_on()
+
+    # Disable scientific notation
+    ax = plt.gca()
+    ax.xaxis.set_major_formatter(ticker.ScalarFormatter(useOffset=False))
+    ax.ticklabel_format(style='plain', axis='x')
+
+    # Format minor ticks
+    ax.xaxis.set_minor_locator(ticker.MultipleLocator(40000))
+    ax.xaxis.set_minor_formatter(ticker.FormatStrFormatter('%d'))
+
+    # Rotate major and minor tick labels
+    plt.xticks(rotation=45)
+    for label in ax.get_xticklabels(minor=True):
+        label.set_rotation(45)
+
+    plt.legend()
+    plt.show()
 
