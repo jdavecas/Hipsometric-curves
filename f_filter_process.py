@@ -271,7 +271,8 @@ def export_dataframe(df, is_geodataframe=False):
 
 def remove_nodes_by_cv_threshold(basin_data, cv_threshold):
     """
-    Removes nodes from the basin_data dictionary based on a specified coefficient of variation threshold.
+    Removes nodes from the basin_data dictionary based on a specified coefficient of variation threshold,
+    applied only to nodes with more than 10 width values.
     
     Parameters:
     - basin_data (dict): The dictionary of basin data.
@@ -288,17 +289,20 @@ def remove_nodes_by_cv_threshold(basin_data, cv_threshold):
     for outer_key in list(basin_data.keys()):
         inner_dict = basin_data[outer_key]
         
-        # Calculate CV and identify indices to remove
+        # Calculate CV for nodes with more than 10 width values and identify indices to remove
         indices_to_remove = []
-        for key, values in inner_dict.items():
-            if isinstance(values, list) and len(values) > 1:
-                mean_val = np.mean(values)
-                std_dev = np.std(values)
-                cv = std_dev / mean_val if mean_val != 0 else 0  # Avoid division by zero
-                
-                # Identify nodes to remove if CV exceeds the threshold
-                if cv > cv_threshold:
-                    indices_to_remove.extend(range(len(values)))
+        width_values = inner_dict.get('width', [])
+        
+        # Filter out non-numeric values and ensure there are more than 10 widths
+        numeric_widths = [w for w in width_values if isinstance(w, (int, float)) and not np.isnan(w)]
+        if len(numeric_widths) > 10:
+            mean_val = np.mean(numeric_widths)
+            std_dev = np.std(numeric_widths)
+            cv = std_dev / mean_val if mean_val != 0 else 0  # Avoid division by zero
+            
+            # Identify nodes to remove if CV exceeds the threshold
+            if cv > cv_threshold:
+                indices_to_remove = list(range(len(width_values)))
 
         # Remove items based on the identified indices
         for key in list(inner_dict.keys()):
