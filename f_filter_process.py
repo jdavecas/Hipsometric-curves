@@ -103,13 +103,13 @@ def valid_pairs(basin_data, reach_node, q_b_value, dark_value):
                     if i < len(inner_dict[key]):
                         inner_dict[key].pop(i)
 
-        # Remove the outer key if lists have fewer than 3 items
+        # Remove the outer key if lists have fewer than 10 items
         for key in list(inner_dict.keys()):
-            if isinstance(inner_dict[key], list) and len(inner_dict[key]) < 3:
+            if isinstance(inner_dict[key], list) and len(inner_dict[key]) < 10:
                 del inner_dict[key]
 
         # Check if the inner dictionary is empty or has insufficient items
-        if not inner_dict or all(isinstance(value, list) and len(value) < 3 for value in inner_dict.values()):
+        if not inner_dict or all(isinstance(value, list) and len(value) < 10 for value in inner_dict.values()):
             del basin_data[outer_key]
             deleted_count += 1
         else:
