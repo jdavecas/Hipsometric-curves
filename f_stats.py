@@ -70,7 +70,7 @@ def track_spearman_above_10(N_Spearman):
         num_pairs = result['num_pairs']
         
         # Track counts for nodes with more than 10 observations
-        if num_pairs > 10:
+        if num_pairs >= 10:
             nodes_above_10_observations += 1
             if spearman_corr > 0:
                 positive_above_10 += 1
@@ -85,11 +85,11 @@ def track_spearman_above_10(N_Spearman):
 
     # Display counts for nodes with more than 10 observations
     print(f"Number of nodes with more than 10 observations: {nodes_above_10_observations}")
-    print(f"Number of positive Spearman correlations with >10 observations: {positive_above_10}")
-    print(f"Number of negative Spearman correlations with >10 observations: {negative_above_10}")
-    print(f"Number of zero Spearman correlations with >10 observations: {zero_above_10}")
-    print(f"Number of Spearman correlations >= 0.4 with >10 observations: {above_0_4_above_10}")
-    print(f"Number of Spearman correlations >= 0.6 with >10 observations: {above_0_6_above_10}")
+    print(f"Number of positive Spearman correlations with >=10 observations: {positive_above_10}")
+    print(f"Number of negative Spearman correlations with >=10 observations: {negative_above_10}")
+    print(f"Number of zero Spearman correlations with >=10 observations: {zero_above_10}")
+    print(f"Number of Spearman correlations >= 0.4 with >=10 observations: {above_0_4_above_10}")
+    print(f"Number of Spearman correlations >= 0.6 with >=10 observations: {above_0_6_above_10}")
 
 def best_tradeoff(N_Spearman, min_pairs=5, max_pairs=50, step=5):
     best_tradeoff = None
