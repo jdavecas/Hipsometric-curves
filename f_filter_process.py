@@ -268,3 +268,41 @@ def export_dataframe(df, is_geodataframe=False):
             print(f"DataFrame has been exported to {file_path}")
     else:
         print("Export canceled.")
+
+
+def filter_by_cv_threshold(basin_data, cv_threshold):
+    """
+    Removes entries in the basin_data dictionary where the coefficient of variation (CV)
+    of width measurements exceeds the provided threshold. The threshold is manually set by the user.
+
+    Parameters:
+    - basin_data (dict): Nested dictionary with the structure used in the valid_pairs function.
+    - cv_threshold (float): The maximum allowable coefficient of variation for width measurements.
+    
+    Returns:
+    - dict: Updated dictionary with nodes removed based on the CV threshold.
+    """
+    
+    filtered_data = {}  # Dictionary to store filtered results
+    removed_count = 0  # Counter for removed nodes
+
+    for outer_key, inner_dict in basin_data.items():
+        width_list = inner_dict.get('width', [])
+
+        # Calculate the mean and standard deviation for the width list
+        width_mean = np.mean(width_list)
+        width_std_dev = np.std(width_list)
+
+        # Avoid division by zero and calculate CV
+        cv = width_std_dev / width_mean if width_mean != 0 else 0  # Set CV to 0 if mean is zero
+
+        # Add the entry only if CV is within the threshold
+        if cv <= cv_threshold:
+            filtered_data[outer_key] = inner_dict
+        else:
+            removed_count += 1  # Increment the counter if the node is removed
+
+    # Print the number of nodes removed
+    print(f"Number of nodes removed: {removed_count}")
+
+    return filtered_data
