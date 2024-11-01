@@ -268,3 +268,60 @@ def export_dataframe(df, is_geodataframe=False):
             print(f"DataFrame has been exported to {file_path}")
     else:
         print("Export canceled.")
+
+def remove_nodes_by_cv_threshold(basin_data, cv_threshold):
+    """
+    Removes nodes from the basin_data dictionary based on a specified coefficient of variation threshold.
+    
+    Parameters:
+    - basin_data (dict): The dictionary of basin data.
+    - cv_threshold (float): The CV threshold. Nodes with CVs above this value will be removed.
+    
+    Returns:
+    - basin_data (dict): Updated basin_data with nodes removed based on CV threshold.
+    - summary (DataFrame): A summary DataFrame with the remaining and deleted counts and percentages.
+    """
+    results_list = []  # Initialize list to store results
+    total_keys = len(basin_data.keys())
+    deleted_count = 0
+
+    for outer_key in list(basin_data.keys()):
+        inner_dict = basin_data[outer_key]
+        
+        # Calculate CV and identify indices to remove
+        indices_to_remove = []
+        for key, values in inner_dict.items():
+            if isinstance(values, list) and len(values) > 1:
+                mean_val = np.mean(values)
+                std_dev = np.std(values)
+                cv = std_dev / mean_val if mean_val != 0 else 0  # Avoid division by zero
+                
+                # Identify nodes to remove if CV exceeds the threshold
+                if cv > cv_threshold:
+                    indices_to_remove.extend(range(len(values)))
+
+        # Remove items based on the identified indices
+        for key in list(inner_dict.keys()):
+            if isinstance(inner_dict[key], list):
+                for i in sorted(set(indices_to_remove), reverse=True):
+                    if i < len(inner_dict[key]):
+                        inner_dict[key].pop(i)
+        
+        # Remove outer key if lists have fewer than 3 items
+        if all(isinstance(value, list) and len(value) < 3 for value in inner_dict.values()):
+            del basin_data[outer_key]
+            deleted_count += 1
+
+    # Calculate remaining and deleted percentages
+    remaining_count = total_keys - deleted_count
+    remaining_percent = (remaining_count / total_keys) * 100
+    deleted_percent = (deleted_count / total_keys) * 100
+
+    # Add the result for this dataset to the list
+    results_list.append([remaining_count, deleted_count, remaining_percent, deleted_percent])
+    summary = pd.DataFrame(results_list, columns=['Remaining', 'Deleted', 'Remaining %', 'Deleted %'])
+
+    # Print results
+    print(f"{deleted_count} out of {total_keys} outer keys were deleted based on CV threshold of {cv_threshold}, which is {deleted_percent:.2f}%")
+    
+    return basin_data, summary
