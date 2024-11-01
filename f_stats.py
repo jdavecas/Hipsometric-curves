@@ -379,51 +379,51 @@ def plot_w_variability_cdfs(data, node_col='node_id', width_col='width', cv_thre
     # Return the count of nodes above CV threshold
     return count_above_threshold
 
-"""
-def plot_w_variability_all_nodes(data, node_col='node_id', width_col='width', min_observations=10):
- 
-    Plots the cumulative distribution functions (CDFs) of river width variability 
-    based on the coefficient of variation (CV) for each river node with more than `min_observations` measurements.
-
-    Parameters:
-    - data (pd.DataFrame): DataFrame containing river nodes and widths.
-    - node_col (str): Column name for river node identifiers.
-    - width_col (str): Column name for river width measurements.
-    - min_observations (int): Minimum number of observations required per node.
-
-    Returns:
-    - None
-  
-    # Filter nodes with more than the minimum required observations
-    node_counts = data[node_col].value_counts()
-    valid_nodes = node_counts[node_counts > min_observations].index
-    filtered_data = data[data[node_col].isin(valid_nodes)]
+def profile_cv_w_W(dataset):
+    plt.figure(figsize=(15, 6))
     
-    # Get unique valid nodes
-    unique_nodes = filtered_data[node_col].unique()
+    # Calculate the coefficient of variation for width
+    width_grouped = dataset.groupby('p_dist_out')['width'].agg(['mean', 'std', 'count']).reset_index()
+    width_grouped = width_grouped[width_grouped['count'] > 10]  # Filter nodes with more than 10 observations
+    width_grouped['cv'] = width_grouped['std'] / width_grouped['mean']  # Calculate CV for width
 
-    # Set up the plot
-    plt.figure(figsize=(10, 8))
+    # Calculate the coefficient of variation for WSE
+    wse_grouped = dataset.groupby('p_dist_out')['wse'].agg(['mean', 'std', 'count']).reset_index()
+    wse_grouped = wse_grouped[wse_grouped['count'] > 10]  # Filter nodes with more than 10 observations
+    wse_grouped['cv'] = wse_grouped['std'] / wse_grouped['mean']  # Calculate CV for WSE
 
-    for node in unique_nodes:
-        # Filter data for the current node
-        node_data = filtered_data[filtered_data[node_col] == node]
+    # Plot CV of width against 'p_dist_out'
+    plt.plot(width_grouped['p_dist_out'], width_grouped['cv'], color='b', linestyle='-', label='CV of Width')
 
-        # Calculate mean and standard deviation of width for the current node
-        width_stats = node_data[width_col].agg(['mean', 'std'])
-        cv = width_stats['std'] / width_stats['mean'] if width_stats['mean'] > 0 else np.nan
+    # Plot CV of WSE against 'p_dist_out'
+    plt.plot(wse_grouped['p_dist_out'], wse_grouped['cv'], color='r', linestyle='-', label='CV of WSE')
 
-        # Only plot if the CV is valid
-        if not np.isnan(cv):
-            # Plot CDF
-            plt.axvline(cv, linestyle='--', alpha=0.7)
+    # Common plotting elements
+    plt.autoscale()
+    plt.xlabel('Distance from the outlet (m)')
+    plt.ylabel('Coefficient of Variation (CV)')
+    plt.title("Profile of Coefficient of Variation (CV) for Width and WSE vs Distance to Outlet")
+    plt.grid(which='both', linestyle='--', linewidth=0.3)
+    plt.minorticks_on()
 
-    plt.xlabel('Coefficient of Variation (CV)')
-    plt.ylabel('Cumulative Probability')
-    plt.title('CDFs of River Width Variability for Nodes with More than 10 Observations')
-    plt.grid(True)
+    # Disable scientific notation
+    ax = plt.gca()
+    ax.xaxis.set_major_formatter(ticker.ScalarFormatter(useOffset=False))
+    ax.ticklabel_format(style='plain', axis='x')
+
+    # Format minor ticks
+    ax.xaxis.set_minor_locator(ticker.MultipleLocator(40000))
+    ax.xaxis.set_minor_formatter(ticker.FormatStrFormatter('%d'))
+
+    # Rotate major and minor tick labels
+    plt.xticks(rotation=45)
+    for label in ax.get_xticklabels(minor=True):
+        label.set_rotation(45)
+
+    # Display legend
+    plt.legend()
     plt.show()
-"""
+
 def profile_cv(dataset):
     plt.figure(figsize=(15, 6))
     
@@ -460,3 +460,41 @@ def profile_cv(dataset):
     plt.legend()
     plt.show()
 
+def scatter_cv_width_wse_with_spearman(dataset):
+    plt.figure(figsize=(8, 6))
+    
+    # Calculate the coefficient of variation for widths and WSE for nodes with more than 10 observations
+    grouped = dataset.groupby('p_dist_out').agg(
+        width_mean=('width', 'mean'),
+        width_std=('width', 'std'),
+        width_count=('width', 'count'),
+        wse_mean=('wse', 'mean'),
+        wse_std=('wse', 'std')
+    ).reset_index()
+    
+    # Filter nodes with more than 10 observations
+    grouped = grouped[grouped['width_count'] > 10]
+    
+    # Calculate CV for width and WSE
+    grouped['cv_width'] = grouped['width_std'] / grouped['width_mean']
+    grouped['cv_wse'] = grouped['wse_std'] / grouped['wse_mean']
+    
+    # Calculate Spearman's coefficient
+    spearman_coefficient, p_value = scipy.stats.spearmanr(grouped['cv_width'], grouped['cv_wse']) 
+    
+    # Create scatter plot for CV of width vs. CV of WSE
+    plt.scatter(grouped['cv_width'], grouped['cv_wse'], color='b', alpha=0.6, edgecolor='k', s=50)
+    
+    # Display Spearman's coefficient on the plot
+    plt.text(0.05, 0.95, f"Spearman's = {spearman_coefficient:.2f}\n(p = {p_value:.2e})",
+             transform=plt.gca().transAxes, fontsize=10, verticalalignment='top')
+    
+    # Common plotting elements
+    plt.xlabel('Coefficient of Variation (CV) of Width')
+    plt.ylabel('Coefficient of Variation (CV) of WSE')
+    plt.title("Scatter Plot of CV of Widths vs CV of WSE")
+    plt.grid(True, which='both', linestyle='--', linewidth=0.3)
+    
+    plt.show()
+
+    plt.show()
