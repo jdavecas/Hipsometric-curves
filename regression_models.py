@@ -15,7 +15,7 @@ def l_regression(river, min_spearman=None, min_obs=0, show_p_value=True):
     Args:
         river (dict): Dictionary containing node data with 'width' and 'wse' keys.
         min_spearman (float or None): Minimum Spearman correlation value to include a node in the plot.
-                                      If None, no filtering is applied (default: None).
+                                      If None, plots are divided equally above and below a Spearman value of 0.4.
         min_obs (int): Minimum number of observations required to display a scatter plot for a node (default: 10).
         show_p_value (bool): If True, displays the p-value on each scatter plot (default: True).
     """
@@ -52,20 +52,25 @@ def l_regression(river, min_spearman=None, min_obs=0, show_p_value=True):
             'Intercept': intercept
         })
 
-        # Add node to appropriate list based on Spearman correlation for plotting
+        # Divide nodes based on Spearman correlation threshold
         if spearman_corr >= 0.4:
             above_threshold.append((node_id, spearman_corr, p_value, slope, intercept))
-        elif spearman_corr < 0.4:
+        else:
             below_threshold.append((node_id, spearman_corr, p_value, slope, intercept))
 
-    # Randomly select nodes for plotting, 50% from each group
-    num_above = min(len(above_threshold), 10)
-    num_below = min(len(below_threshold), 10)
-    selected_above = random.sample(above_threshold, num_above)
-    selected_below = random.sample(below_threshold, num_below)
-
-    # Combine selected nodes for plotting
-    random_nodes = selected_above + selected_below
+    # Determine the nodes to plot based on min_spearman value
+    if min_spearman is None:
+        # Select 10 nodes above 0.4 and 10 nodes below 0.4, if available
+        num_above = min(len(above_threshold), 10)
+        num_below = min(len(below_threshold), 10)
+        selected_above = random.sample(above_threshold, num_above)
+        selected_below = random.sample(below_threshold, num_below)
+        random_nodes = selected_above + selected_below
+    else:
+        # Select up to 20 nodes that meet the min_spearman threshold
+        filtered_above = [node for node in above_threshold if node[1] >= min_spearman]
+        num_above = min(len(filtered_above), 20)
+        random_nodes = random.sample(filtered_above, num_above)
 
     # Create scatter plots in a 4x5 grid (up to 20 plots)
     plt.figure(figsize=(20, 15))
