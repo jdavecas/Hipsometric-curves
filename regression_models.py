@@ -38,16 +38,16 @@ def l_regression(river, min_spearman=None, min_obs=0, show_p_value=True):
         width = np.array(node_data['width']).reshape(-1, 1)
         wse = np.array(node_data['wse'])
         reg = LinearRegression().fit(width, wse)
-        slope = reg.coef_[0]
-        intercept = reg.intercept_
+        slope = round(reg.coef_[0], 3)
+        intercept = round(reg.intercept_, 3)
         r2 = reg.score(width, wse)
 
         # Store node data in results DataFrame
         results.append({
             'Node': node_id,
-            'Spearman': spearman_corr,
-            'p_value': p_value,
-            'R2': r2,
+            'Spearman': round(spearman_corr, 3),
+            'p_value': round(p_value, 3),
+            'R2': round(r2, 3),
             'Slope': slope,
             'Intercept': intercept
         })
@@ -81,9 +81,9 @@ def l_regression(river, min_spearman=None, min_obs=0, show_p_value=True):
 
         # Refit the model per plot to verify consistency
         reg = LinearRegression().fit(width, wse)
-        slope = reg.coef_[0]
-        intercept = reg.intercept_
-        r2 = reg.score(width, wse)
+        slope = round(reg.coef_[0], 3)
+        intercept = round(reg.intercept_, 3)
+        r2 = round(reg.score(width, wse), 3)
         
         # Create subplot
         plt.subplot(4, 5, i)
@@ -102,12 +102,17 @@ def l_regression(river, min_spearman=None, min_obs=0, show_p_value=True):
         # Display p-value, slope, and intercept in smaller font if show_p_value is True
         if show_p_value:
             plt.text(0.05, 0.85, f"p-value: {p_value:.3f}", ha='left', va='center', transform=plt.gca().transAxes, fontsize=8, color="gray")
-        plt.text(0.05, 0.75, f"Slope: {slope:.2f}\nIntercept: {intercept:.2f}", ha='left', va='center', transform=plt.gca().transAxes, fontsize=8, color="gray")
+        plt.text(0.05, 0.75, f"Slope: {slope}\nIntercept: {intercept}", ha='left', va='center', transform=plt.gca().transAxes, fontsize=8, color="gray")
 
     # Adjust layout and display
     plt.tight_layout()
     plt.show()
     
-    # Create DataFrame from results for all nodes
+    # Create DataFrame from results for all nodes and export with 3 decimals
     results_df = pd.DataFrame(results)
+    results_df = results_df.round({'Spearman': 3, 'p_value': 3, 'R2': 3, 'Slope': 3, 'Intercept': 3})
+    
+    # Optionally, you can save the DataFrame to a CSV file with 3-decimal formatting
+    # results_df.to_csv('regression_results.csv', float_format='%.3f', index=False)
+    
     return results_df
