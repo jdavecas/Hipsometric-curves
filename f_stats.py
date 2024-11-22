@@ -170,11 +170,11 @@ def geojoin(gdf,df,reach_node='node_id'):
 
     return merged_gdf
 
-def hypsometric(river, min_spearman=None, min_obs=0, show_p_value=True):
+def hypsometric(river, min_spearman=None, min_obs=0, show_p_value=True, min_p_value=0.05):
     """
     Generates hypsometric scatter plots for randomly selected river nodes.
     Ensures 50% of scatter plots have Spearman correlation above 0.4, and 50% below 0.39.
-    Optionally filters nodes by Spearman correlation between 'width' and 'wse' if a threshold is provided.
+    Optionally filters nodes by Spearman correlation, minimum observations, and p-value.
 
     Args:
         river (dict): Dictionary containing node data with 'width' and 'wse' keys.
@@ -182,6 +182,7 @@ def hypsometric(river, min_spearman=None, min_obs=0, show_p_value=True):
                                       If None, no filtering is applied (default: None).
         min_obs (int): Minimum number of observations required to display a scatter plot for a node (default: 0).
         show_p_value (bool): If True, displays the p-value on each scatter plot (default: True).
+        min_p_value (float): Minimum p-value required to include a node in the plot (default: 0.05).
     """
     # Separate nodes based on Spearman correlation threshold
     above_threshold = []
@@ -194,10 +195,11 @@ def hypsometric(river, min_spearman=None, min_obs=0, show_p_value=True):
             
         spearman_corr, p_value = scipy.stats.spearmanr(node_data['width'], node_data['wse'])
         
-        if spearman_corr >= 0.4:
-            above_threshold.append((node_id, spearman_corr, p_value))
-        elif spearman_corr <= 0.39:
-            below_threshold.append((node_id, spearman_corr, p_value))
+        if p_value <= min_p_value:  # Filter by p-value
+            if spearman_corr >= 0.4:
+                above_threshold.append((node_id, spearman_corr, p_value))
+            elif spearman_corr <= 0.39:
+                below_threshold.append((node_id, spearman_corr, p_value))
 
     # Randomly select nodes for plotting, 50% from each group
     num_above = min(len(above_threshold), 10)  # 50% from above 0.4
@@ -228,8 +230,6 @@ def hypsometric(river, min_spearman=None, min_obs=0, show_p_value=True):
     # Adjust layout and display
     plt.tight_layout()
     plt.show()
-
-
 
 
 def profiles(river1, river2=None, river3=None):
