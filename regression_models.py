@@ -6,11 +6,11 @@ import matplotlib.pyplot as plt
 from sklearn.linear_model import LinearRegression
 
 
-def l_regression(river, min_spearman=None, min_obs=0, show_p_value=True):
+def l_regression(river, min_spearman=None, min_obs=0, show_p_value=True, min_p_value=0.05):
     """
     Generates hypsometric scatter plots for randomly selected river nodes,
     adding linear regression with R², slope, and intercept.
-    Stores statistics for all nodes in a DataFrame, while displaying only a random selection of scatter plots.
+    Filters nodes based on minimum p-value and stores statistics for all nodes in a DataFrame.
 
     Args:
         river (dict): Dictionary containing node data with 'width' and 'wse' keys.
@@ -18,6 +18,7 @@ def l_regression(river, min_spearman=None, min_obs=0, show_p_value=True):
                                       If None, plots are divided equally above and below a Spearman value of 0.4.
         min_obs (int): Minimum number of observations required to display a scatter plot for a node (default: 10).
         show_p_value (bool): If True, displays the p-value on each scatter plot (default: True).
+        min_p_value (float): Minimum p-value required to include a node in the plot (default: 0.05).
     """
     # Prepare list to store statistics for all nodes
     results = []
@@ -33,6 +34,10 @@ def l_regression(river, min_spearman=None, min_obs=0, show_p_value=True):
             
         # Calculate Spearman correlation and p-value
         spearman_corr, p_value = scipy.stats.spearmanr(node_data['width'], node_data['wse'])
+        
+        # Filter based on p-value
+        if p_value >= min_p_value:
+            continue  # Skip nodes with p-values above or equal the threshold
         
         # Perform linear regression
         width = np.array(node_data['width']).reshape(-1, 1)
@@ -111,8 +116,5 @@ def l_regression(river, min_spearman=None, min_obs=0, show_p_value=True):
     # Create DataFrame from results for all nodes and export with 3 decimals
     results_df = pd.DataFrame(results)
     results_df = results_df.round({'Spearman': 3, 'p_value': 3, 'R2': 3, 'Slope': 3, 'Intercept': 3})
-    
-    # Optionally, you can save the DataFrame to a CSV file with 3-decimal formatting
-    # results_df.to_csv('regression_results.csv', float_format='%.3f', index=False)
     
     return results_df
