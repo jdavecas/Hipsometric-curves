@@ -57,6 +57,52 @@ def S_correlation(river_dict):
     N_Spearman_df = pd.DataFrame.from_dict(N_Spearman, orient='index').reset_index()
     return N_Spearman, N_Spearman_df
 
+def subset_significant_nodes(river_dict):
+    subset_nodes = {}
+    subset_count = 0
+    above_0_4_above_10 = 0
+    above_0_6_above_10 = 0
+
+    for id, variables in river_dict.items():
+        width_values = variables['width']
+        wse_values = variables['wse']
+
+        # Ensure both lists have the same length
+        if len(width_values) != len(wse_values):
+            continue
+
+        spearman_corr, p_value = scipy.stats.spearmanr(width_values, wse_values)
+        if p_value < 0.05 and spearman_corr > 0.4:
+            subset_nodes[id] = {
+                'spearman_corr': spearman_corr,
+                'p_value': p_value,
+                'num_pairs': len(width_values)
+            }
+            subset_count += 1
+
+            # Check for additional conditions
+            if len(width_values) >= 10:
+                if spearman_corr >= 0.4:
+                    above_0_4_above_10 += 1
+                if spearman_corr >= 0.6:
+                    above_0_6_above_10 += 1
+
+    # Print accountability
+    total_nodes = len(river_dict)
+    positive_nodes = sum(1 for v in subset_nodes.values() if v['spearman_corr'] > 0)
+    nodes_above_10_observations = sum(1 for v in subset_nodes.values() if v['num_pairs'] >= 10)
+
+    print(f"Total nodes in input: {total_nodes}")
+    print(f"Total significant nodes: {subset_count}")
+    print(f"Number of positive significant nodes: {positive_nodes}")
+    print(f"Number of significant nodes with >=10 observations: {nodes_above_10_observations}")
+    print(f"Number of Spearman correlations >= 0.4 with >=10 observations: {above_0_4_above_10}")
+    print(f"Number of Spearman correlations >= 0.6 with >=10 observations: {above_0_6_above_10}")
+
+    # Convert to DataFrame for further use
+    subset_nodes_df = pd.DataFrame.from_dict(subset_nodes, orient='index').reset_index()
+    return subset_nodes, subset_nodes_df
+
 def track_spearman_above_10(N_Spearman):
     nodes_above_10_observations = 0
     positive_above_10 = 0
