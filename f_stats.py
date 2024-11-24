@@ -59,6 +59,7 @@ def S_correlation(river_dict):
 
 def subset_significant_nodes(river_dict):
     subset_nodes = {}
+    enriched_subset_nodes = {}
     subset_count = 0
     above_0_4_above_10 = 0
     above_0_6_above_10 = 0
@@ -72,7 +73,8 @@ def subset_significant_nodes(river_dict):
             continue
 
         spearman_corr, p_value = scipy.stats.spearmanr(width_values, wse_values)
-        if p_value < 0.05 and spearman_corr > 0.4:
+        if p_value <= 0.05 and spearman_corr >= 0.4:
+            # Add the significant node to subset_nodes
             subset_nodes[id] = {
                 'spearman_corr': spearman_corr,
                 'p_value': p_value,
@@ -87,6 +89,14 @@ def subset_significant_nodes(river_dict):
                 if spearman_corr >= 0.6:
                     above_0_6_above_10 += 1
 
+            # Create the enriched subset with additional columns
+            enriched_subset_nodes[id] = {
+                **variables,  # Include all columns from the input dictionary
+                'spearman_corr': spearman_corr,
+                'p_value': p_value,
+                'num_pairs': len(width_values)
+            }
+
     # Print accountability
     total_nodes = len(river_dict)
     positive_nodes = sum(1 for v in subset_nodes.values() if v['spearman_corr'] > 0)
@@ -99,9 +109,11 @@ def subset_significant_nodes(river_dict):
     print(f"Number of Spearman correlations >= 0.4 with >=10 observations: {above_0_4_above_10}")
     print(f"Number of Spearman correlations >= 0.6 with >=10 observations: {above_0_6_above_10}")
 
-    # Convert to DataFrame for further use
+    # Convert dictionaries to DataFrames for further use
     subset_nodes_df = pd.DataFrame.from_dict(subset_nodes, orient='index').reset_index()
-    return subset_nodes, subset_nodes_df
+    enriched_subset_nodes_df = pd.DataFrame.from_dict(enriched_subset_nodes, orient='index').reset_index()
+
+    return subset_nodes, subset_nodes_df, enriched_subset_nodes, enriched_subset_nodes_df
 
 def track_spearman_above_10(N_Spearman):
     nodes_above_10_observations = 0
