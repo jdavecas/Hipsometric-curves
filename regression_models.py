@@ -427,7 +427,7 @@ def pw_l_regression_huber_node(
     river, 
     node_id=None, 
     min_spearman=None, 
-    min_obs=None, 
+    min_obs=1, 
     show_p_value=True, 
     min_p_value=None,
     delta=1.345  # Default delta for Huber loss
