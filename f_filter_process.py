@@ -138,7 +138,7 @@ def valid_pairs(basin_data, reach_node, q_b_value, dark_value):
 
 def outliers(basin_data):
     """
-    Removes outliers from the basin dictionary. Outliers are values more than 2 standard deviations 
+    Removes outliers from the basin dictionary. Outliers are values more than 3 standard deviations 
     from the mean in 'width' and 'wse' lists. If an outlier is removed, all values in the same position
     in other lists are also removed. This is applied only to lists with more than 20 items.
     """
@@ -152,7 +152,7 @@ def outliers(basin_data):
 
         # Process only lists with more than 20 items
         for key in list(inner_dict.keys()):
-            if isinstance(inner_dict[key], list) and len(inner_dict[key]) > 20:
+            if isinstance(inner_dict[key], list) and len(inner_dict[key]) > 15:
                 # Check if 'width' or 'wse' keys are in the dictionary
                 if key in ['width', 'wse']:
                     data_list = inner_dict[key]
@@ -162,7 +162,7 @@ def outliers(basin_data):
                     std_dev = np.std(data_list)
 
                     # Identify outliers
-                    outliers_indices = [i for i, value in enumerate(data_list) if abs(value - mean) > 2 * std_dev]
+                    outliers_indices = [i for i, value in enumerate(data_list) if abs(value - mean) > 3 * std_dev]
 
                     # Count removed elements in the lists
                     total_list_removed += len(outliers_indices)
