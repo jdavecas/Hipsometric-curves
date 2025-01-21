@@ -152,7 +152,7 @@ def outliers(basin_data):
 
         # Process only lists with more than 20 items
         for key in list(inner_dict.keys()):
-            if isinstance(inner_dict[key], list) and len(inner_dict[key]) > 15:
+            if isinstance(inner_dict[key], list) and len(inner_dict[key]) > 10:
                 # Check if 'width' or 'wse' keys are in the dictionary
                 if key in ['width', 'wse']:
                     data_list = inner_dict[key]
