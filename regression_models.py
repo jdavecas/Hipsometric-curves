@@ -182,7 +182,7 @@ def l_regression_node(
         axes[0].scatter(node_data['width'], node_data['wse'], alpha=0.8, color="blue", edgecolor="white", label="Data Points")
         x_range = np.linspace(widths.min(), widths.max(), 100)
         y_range = slope * x_range + intercept
-        axes[0].plot(x_range, y_range, color="red", linestyle="--", linewidth=2, label="Huber Regression Line")
+        axes[0].plot(x_range, y_range, color="red", linestyle="--", linewidth=2, label="OLS Regression Line")
         axes[0].set_title(f"Node ID: {node_id}\nHuber Regression\nR²: {r_squared}, Slope: {slope}, Intercept: {intercept}")
         axes[0].set_xlabel("Width")
         axes[0].set_ylabel("WSE")
