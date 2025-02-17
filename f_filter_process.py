@@ -96,7 +96,7 @@ def valid_pairs(basin_data, reach_node, q_b_value, dark_value):
         indices_to_remove = [
             i for i, (w, ws, bl, dfr, nl, ic, id) in enumerate(zip(width_list, wse_list, bit_list, dark_list, node_list, 
                                                                    ice_clim_list, ice_dyn_list))
-            if w is None or ws is None or w < 99 or ws < 0 or bl >= q_b_value or dfr > dark_value or nl is None or ic == 2 or id == 2
+            if w is None or ws is None or w < 79 or ws < 0 or bl >= q_b_value or dfr > dark_value or nl is None or ic == 2 or id == 2
         ]
 
         # Remove items in reverse order to avoid indexing issues
@@ -116,9 +116,9 @@ def valid_pairs(basin_data, reach_node, q_b_value, dark_value):
             del basin_data[outer_key]
             deleted_count += 1
         else:
-            # Identify and store lists with more than 20 items
+            # Identify and store lists with more than 10 items
             for key, value in inner_dict.items():
-                if isinstance(value, list) and len(value) > 20:
+                if isinstance(value, list) and len(value) > 10:
                     large_lists[key] = value
 
     # Calculate remaining and deleted percentages
@@ -150,9 +150,9 @@ def outliers(basin_data):
     for outer_key in list(basin_data.keys()):
         inner_dict = basin_data[outer_key]
 
-        # Process only lists with more than 20 items
+        # Process only lists with more than 15 items
         for key in list(inner_dict.keys()):
-            if isinstance(inner_dict[key], list) and len(inner_dict[key]) > 9:
+            if isinstance(inner_dict[key], list) and len(inner_dict[key]) > 14:
                 # Check if 'width' or 'wse' keys are in the dictionary
                 if key in ['width', 'wse']:
                     data_list = inner_dict[key]
