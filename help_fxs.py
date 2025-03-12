@@ -10,13 +10,14 @@ import sqlite3
 import sys
 from pathlib import Path
 from typing import overload
-
+import math
 import geopandas as gpd
 import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 import pandas as pd
 from eomaps import Maps
 from shapely import wkb
+import numpy as np
 
 # Define conversion for transforming between meters and feet
 m2ft = 3.2808399
@@ -368,26 +369,121 @@ def plot_ms_xs(xs_df, color, units="feet"):
     plt.ylabel("Depth (" + units + ")")
     plt.grid(True)
 
-
-def plot_mb_xs(xs_df, color, units="meters"):
-    """Plots cross-sectional profiles from moving-boat ADCP measurements.
+def plot_mb_xs_dict(xs_dict, dict2, colors=None, units="meters", depth_column="Depth_NAVD88(m)", cols=3):
+    """Plots multiple cross-sectional profiles from moving-boat ADCP measurements stored in a dictionary.
 
     Args:
-    - xs_df (DataFrame): A DataFrame containing cross-sectional measurement data with 'Distance_Meters' and 'Depth_Meters' columns.
-    - color (str): The color of the plot line.
-    - units (str): The units to plot the data in (feet or meters).
+    - xs_dict (dict): Dictionary where keys are identifiers and values are DataFrames with 'Distance_Meters' and depth column.
+    - colors (list of str, optional): List of colors for each plot. If None, it uses a default colormap.
+    - units (str): The units to plot the data in ("feet" or "meters").
+    - depth_column (str): Column name for depth values.
+    - cols (int): Number of columns in the grid layout.
 
     Returns:
     - None
     """
-    if units == "feet":
-        xs_df["Distance_Meters"] = xs_df["Distance_Meters"] * m2ft
-        xs_df["Depth_Meters"] = xs_df["Depth_Meters"] * m2ft
-    plt.plot(xs_df["Distance_Meters"], -1 * xs_df["Depth_Meters"], linewidth=2, marker="o",markersize=2, linestyle="-", color=color)
-    plt.xlabel("Distance From Initial Point (" + units + ")")
-    plt.ylabel("Depth (" + units + ")")
-    plt.title('Cross-sectional profile')
-    plt.grid(True)
-    # Customize the grid
-    plt.grid(True, linestyle='--', alpha=0.5)
-    plt.gca().set_facecolor('#f2f2f2')
+    # Filter out DataFrames that do not have the required depth column
+    filtered_xs_dict = {k: v for k, v in xs_dict.items() if depth_column in v.columns}
+
+    num_profiles = len(filtered_xs_dict)
+    rows = math.ceil(num_profiles / cols)  # Determine the number of rows
+
+    fig, axes = plt.subplots(rows, cols, figsize=(cols * 5, rows * 4))
+    axes = np.array(axes).flatten()  # Flatten for easy iteration
+
+    # Use a default colormap if colors are not provided
+    if colors is None:
+        cmap = plt.cm.get_cmap("tab10", num_profiles)
+        colors = [cmap(i) for i in range(num_profiles)]
+
+    # Iterate over the filtered dictionary items
+    for i, (key, xs_df) in enumerate(filtered_xs_dict.items()):
+        ax = axes[i]  # Select subplot
+        
+        # Extract the numeric ID (before "_mb")
+        base_id = key.split('_mb')[0]
+
+        # Check if base_id is in dict2 before accessing it
+        if base_id in dict2 and "elevation_NAVD88(m)" in dict2[base_id]:
+            datum_elevation = dict2[base_id]["elevation_NAVD88(m)"].iloc[0]
+        else:
+            print(f"Warning: Missing elevation data for {base_id}. Skipping plot.")
+            continue  # Skip this iteration to prevent KeyError
+
+        if units == "feet":
+            xs_df["Distance_Meters"] = xs_df["Distance_Meters"] * m2ft
+            xs_df[depth_column] = xs_df[depth_column] * m2ft
+
+        ax.plot(xs_df["Distance_Meters"], xs_df[depth_column],
+                linewidth=2, marker="o", markersize=2, linestyle="-", color=colors[i])
+        ax.set_xlabel(f"Distance ({units})")
+        ax.set_ylabel(f"Depth ({units})")
+        ax.set_title(f'Cross-section: {key}')
+        ax.grid(True, linestyle='--', alpha=0.5)
+        ax.set_facecolor('#f2f2f2')
+
+        # Adjust y-axis to display absolute values
+        y_ticks = ax.get_yticks()
+        ax.set_yticks(y_ticks)
+        ax.set_yticklabels([f"{y:.2f}" for y in y_ticks])  
+
+    # Hide any unused subplots
+    for j in range(i+1, len(axes)):
+        fig.delaxes(axes[j])
+
+    plt.tight_layout()
+    plt.show()
+
+
+
+def plot_mb_xs_grid(xs_df, color, units="meters", depth_column=None,cols=3):
+    """Plots a grid of cross-sectional profiles from moving-boat ADCP measurements.
+
+    Args:
+    - xs_dict (dict): A dictionary where keys are IDs and values are DataFrames containing cross-sectional measurement data.
+    - color (str): The color of the plot lines.
+    - units (str): The units to plot the data in (feet or meters).
+    - depth_column (str): The column name for depth values.
+    - cols (int): Number of columns in the grid layout.
+
+    Returns:
+    - None
+    """
+    if not xs_df:
+        print("No data to plot.")
+        return
+
+    num_plots = len(xs_df)
+    rows = int(np.ceil(num_plots / cols))  # Determine the required rows
+
+    fig, axes = plt.subplots(rows, cols, figsize=(5 * cols, 4 * rows))
+    axes = axes.flatten()  # Flatten in case of multiple rows
+
+    for i, (key, xs_df) in enumerate(xs_df.items()):
+        ax = axes[i]
+
+        if units == "feet":
+            xs_df["Distance_Meters"] = xs_df["Distance_Meters"] * m2ft
+            xs_df[depth_column] = xs_df[depth_column] * m2ft
+
+        ax.plot(xs_df["Distance_Meters"], xs_df[depth_column] , linewidth=2, marker="o",
+                markersize=2, linestyle="-", color=color)
+        ax.set_xlabel(f"Distance ({units})")
+        ax.set_ylabel(f"Depth ({units})")
+        ax.set_title(f'Profile: {key}')
+        ax.grid(True, linestyle='--', alpha=0.5)
+        ax.set_facecolor('#f2f2f2')
+
+        # Modify y-axis to display absolute values
+        y_ticks = ax.get_yticks()
+        y_tick_labels = [y for y in y_ticks]
+        ax.set_yticks(y_ticks)
+        ax.set_yticklabels(y_tick_labels)
+        
+    # Hide empty subplots if num_plots is not a perfect multiple of cols
+    for j in range(i + 1, len(axes)):
+        fig.delaxes(axes[j])
+
+    plt.tight_layout()
+    plt.show()
+
