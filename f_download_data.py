@@ -55,8 +55,8 @@ def download_data(Basin, passes, continent, start_date, reach_node):
             for codes in passes:
                 granule_name_patter = f'*{reach_node}*_*_{codes}_{continent}*' # Define the pattern to search for the granule
                 results2 = earthaccess.search_data(short_name = 'SWOT_L2_HR_RIVERSP_2.0',
-                                                   temporal = (f'{start_date},{current_date_string} {current_time_string}'),
-                                                   granule_name = granule_name_patter)
+                                                temporal = (f'{start_date},{current_date_string} {current_time_string}'),
+                                                granule_name = granule_name_patter)
                 if not results2:
                     continue
 
