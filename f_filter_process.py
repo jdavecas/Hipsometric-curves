@@ -95,7 +95,7 @@ def valid_pairs(basin_data, reach_node, q_b_value, dark_value):
         # Identify indices to remove based on criteria
         indices_to_remove = [
             i for i, (w, ws, bl, dfr, nl, ic, id) in enumerate(zip(width_list, wse_list, bit_list, dark_list, node_list, 
-                                                                   ice_clim_list, ice_dyn_list))
+                                                                ice_clim_list, ice_dyn_list))
             if w is None or ws is None or w < 79 or ws < 0 or bl >= q_b_value or dfr > dark_value or nl is None or ic == 2 or id == 2
         ]
 
