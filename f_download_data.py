@@ -42,9 +42,15 @@ def download_data(Basin, passes, continent, start_date, reach_node):
     relapath = os.path.join(one_back, '0_data','External', 'Basins', Basin, 'shapes', reach_node)
     savepath = os.path.join(one_back, relapath)
 
-    # Format the current date and time as strings
-    current_date_string = current_datetime.strftime('%Y-%m-%d')
-    current_time_string = current_datetime.strftime('%H:%M:%S')
+    # Convert start_date to datetime
+    start_dt = datetime.strptime(start_date, '%Y-%m-%d %H:%M:%S')
+    end_dt = datetime.now()
+
+    temporal_range = (
+        start_dt.strftime('%Y-%m-%dT%H:%M:%S'),
+        end_dt.strftime('%Y-%m-%dT%H:%M:%S')
+)
+
 
     attempts = 0
 
@@ -54,9 +60,11 @@ def download_data(Basin, passes, continent, start_date, reach_node):
             files_downloaded = 0
             for codes in passes:
                 granule_name_patter = f'*{reach_node}*_*_{codes}_{continent}*' # Define the pattern to search for the granule
-                results2 = earthaccess.search_data(short_name = 'SWOT_L2_HR_RIVERSP_2.0',
-                                                temporal = (f'{start_date},{current_date_string} {current_time_string}'),
-                                                granule_name = granule_name_patter)
+                results2 = earthaccess.search_data(
+                    short_name='SWOT_L2_HR_RIVERSP_2.0',
+                    temporal=temporal_range,
+                    granule_name=granule_name_patter
+                )
                 if not results2:
                     continue
 
