@@ -137,9 +137,9 @@ def l_regression_node(
     Args:
         river (dict): Dictionary containing node data with 'width' and 'wse' keys.
         node_id (str or None): Specific node to plot. If None, plots nodes based on 
-                               random selection or threshold criteria.
+                            random selection or threshold criteria.
         min_spearman (float or None): Minimum Spearman correlation value to include a node in the plot.
-                                      If None, plots are divided equally above and below a Spearman value of 0.4.
+                                    If None, plots are divided equally above and below a Spearman value of 0.4.
         min_obs (int): Minimum number of observations required to display a scatter plot for a node (default: 10).
         show_p_value (bool): If True, displays the p-value on the scatter plot (default: True).
         min_p_value (float): Minimum p-value required to include a node in the plot (default: 0.05).
@@ -346,9 +346,9 @@ def pw_l_regression_node(
     Args:
         river (dict): Dictionary containing node data with 'width' and 'wse' keys.
         node_id (str or None): Specific node to plot. If None, plots nodes based on 
-                               random selection or threshold criteria.
+                            random selection or threshold criteria.
         min_spearman (float or None): Minimum Spearman correlation value to include a node in the plot.
-                                      If None, plots are divided equally above and below a Spearman value of 0.4.
+                                    If None, plots are divided equally above and below a Spearman value of 0.4.
         min_obs (int): Minimum number of observations required to display a scatter plot for a node (default: 10).
         show_p_value (bool): If True, displays the p-value on the scatter plot (default: True).
         min_p_value (float): Minimum p-value required to include a node in the plot (default: 0.05).
