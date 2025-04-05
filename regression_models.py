@@ -250,354 +250,362 @@ def l_regression_node(
         return pd.DataFrame(results).round(3)
 
 
-def huber_regression(river, node_id, epsilon=1.35, min_obs=10):
+
+# Huber regression with fixed epsilon=1.345, and using AIC (Akaike Information Criterion) for simple or piecewise linear regression
+def compute_aic(rss, n, k):
+    return n * np.log(rss / n) + 2 * k
+
+def fixed_huber_fit(X, y):
+    model = HuberRegressor(epsilon=1.345, max_iter=500)
+    model.fit(X, y)
+    y_pred = model.predict(X)
+    residuals = y - y_pred
+    return model, y_pred, residuals
+
+def fixed_huber_piecewise_aic(river_dict):
     """
-    Performs Huber regression for a specific node in the river dataset, 
-    handling outliers and reporting robust statistics.
-    
-    Args:
-        river (dict): Dictionary containing node data with 'width' and 'wse' keys.
-        node_id (str): ID of the node to analyze.
-        epsilon (float): Parameter controlling the threshold for outlier influence in Huber regression (default: 1.35).
-        min_obs (int): Minimum number of observations required to perform regression (default: 10).
-    
-    Returns:
-        dict: A dictionary with regression statistics including Spearman and Pearson correlations.
+    Apply fixed-epsilon Huber regression to a dictionary of river nodes.
+    Returns a DataFrame summarizing model type and parameters per node.
     """
-    # Check if node_id exists
-    if node_id not in river:
-        raise ValueError(f"Node ID '{node_id}' not found in the dataset.")
-    
-    node_data = river[node_id]
-    widths = np.array(node_data['width'])
-    wses = np.array(node_data['wse'])
-    
-    # Ensure sufficient observations
-    if len(widths) < min_obs:
-        raise ValueError(f"Node ID '{node_id}' has fewer than {min_obs} observations.")
-    
-    # Perform Huber regression
-    model = HuberRegressor(epsilon=epsilon).fit(widths.reshape(-1, 1), wses)
-    slope = round(model.coef_[0], 3)
-    intercept = round(model.intercept_, 3)
-    r_squared = round(model.score(widths.reshape(-1, 1), wses), 3)
-    
-    # Calculate correlations
-    spearman_corr, spearman_p_value = scipy.stats.spearmanr(widths, wses)
-    pearson_corr, pearson_p_value = scipy.stats.pearsonr(widths, wses)
-    
-    # Compute residuals
-    predicted_wse = model.predict(widths.reshape(-1, 1))
-    residuals = wses - predicted_wse
+    results = []
 
-    # Plot scatter plot and regression line, and residuals on the right side
-    fig, axes = plt.subplots(1, 2, figsize=(16, 6), gridspec_kw={'width_ratios': [2, 1]})
-    
-    # Scatter plot with regression line
-    axes[0].scatter(widths, wses, alpha=0.8, color="blue", edgecolor="white", label="Data Points")
-    x_range = np.linspace(widths.min(), widths.max(), 100)
-    y_range = slope * x_range + intercept
-    axes[0].plot(x_range, y_range, color="red", linestyle="--", linewidth=2, label="Huber Regression Line")
-    axes[0].set_title(f"Node ID: {node_id}\nHuber Regression\nR²: {r_squared}, Slope: {slope}, Intercept: {intercept}")
-    axes[0].set_xlabel("Width")
-    axes[0].set_ylabel("WSE")
-    axes[0].legend()
-    axes[0].grid(alpha=0.3)
+    for node_id, node_data in river_dict.items():
+        x = np.array(node_data['width'])
+        y = np.array(node_data['wse'])
+        n = len(x)
 
-    # Plot residuals on the right side
-    axes[1].scatter(widths, residuals, alpha=0.8, color="green", edgecolor="black", label="Residuals")
-    axes[1].axhline(0, color="red", linestyle="--", linewidth=1)
-    axes[1].set_title("Residuals")
-    axes[1].set_xlabel("Width")
-    axes[1].set_ylabel("Residuals")
-    axes[1].legend()
-    axes[1].grid(alpha=0.3)
+        if n < 3:
+            continue
 
-    # Adjust layout
+        node_result = {
+            'node_id': node_id,  # <- Renamed here
+            'model_type': None,
+            'h0': np.nan, 'h1': np.nan, 'h2': np.nan, 'h3': np.nan,
+            'breakpoint': np.nan,
+            'AIC': np.nan,
+            'final_intercept_1': np.nan, 'final_slope_1': np.nan,
+            'final_intercept_2': np.nan, 'final_slope_2': np.nan
+        }
+
+        # 1. Simple Linear Regression
+        X_simple = x.reshape(-1, 1)
+        try:
+            model_simple, y_pred_simple, residuals_simple = fixed_huber_fit(X_simple, y)
+        except Exception:
+            continue
+
+        rss_simple = np.sum(residuals_simple ** 2)
+        aic_simple = compute_aic(rss_simple, n, 2)
+
+        best_model = {
+            'type': 'simple',
+            'AIC': aic_simple,
+            'model': model_simple,
+            'pred': y_pred_simple,
+            'breakpoint': None,
+            'h0': model_simple.intercept_,
+            'h1': model_simple.coef_[0],
+            'h2': 0,
+            'h3': 0
+        }
+
+        # 2. One-Breakpoint Piecewise Linear Regression
+        candidate_breakpoints = np.unique(x)[1:-1]
+        for bp in candidate_breakpoints:
+            left_count = np.sum(x <= bp)
+            right_count = np.sum(x > bp)
+
+            if 10 <= n <= 15 and (left_count < 5 or right_count < 5):
+                continue
+            elif n >= 16 and (left_count < 0.3 * n or right_count < 0.3 * n):
+                continue
+
+            X_piecewise = np.column_stack([x, np.maximum(0, x - bp)])
+
+            try:
+                model_pw, y_pred_pw, residuals_pw = fixed_huber_fit(X_piecewise, y)
+            except Exception:
+                continue
+
+            h0 = model_pw.intercept_
+            h1 = model_pw.coef_[0]
+            delta = model_pw.coef_[1]
+            h2 = h1 + delta
+
+            # reject if slope change is too small
+            if abs(h2 - h1) < 0.08:
+                continue
+            if h1 < 0 or h2 < 0:
+                continue
+            if 0.9 <= h1 <= 1.0 and 0.9 <= h2 <= 1.0:
+                continue
+            if abs(delta * bp) < 0.6:
+                continue
+
+            rss_pw = np.sum(residuals_pw ** 2)
+            aic_pw = compute_aic(rss_pw, n, 3)
+
+            if aic_pw < best_model['AIC']:
+                best_model = {
+                    'type': 'one_breakpoint',
+                    'AIC': aic_pw,
+                    'model': model_pw,
+                    'pred': y_pred_pw,
+                    'breakpoint': bp,
+                    'h0': h0,
+                    'h1': h1,
+                    'h2': h2,
+                    'h3': delta
+                }
+
+        # Fill in results
+        node_result.update({
+            'model_type': best_model['type'],
+            'h0': best_model['h0'],
+            'h1': best_model['h1'],
+            'h2': best_model['h2'],
+            'h3': best_model['h3'],
+            'breakpoint': best_model['breakpoint'],
+            'AIC': best_model['AIC'],
+            'initial_slope_2': best_model['h1']
+        })
+
+        if best_model['type'] == 'simple':
+            node_result['final_intercept_1'] = best_model['h0']
+            node_result['final_slope_1'] = best_model['h1']
+        else:
+            seg1_int = best_model['h0']
+            seg1_slope = best_model['h1']
+            seg2_slope = best_model['h2']
+            seg2_int = best_model['h0'] - (best_model['h2'] - best_model['h1']) * best_model['breakpoint']
+            node_result['final_intercept_1'] = seg1_int
+            node_result['final_slope_1'] = seg1_slope
+            node_result['final_intercept_2'] = seg2_int
+            node_result['final_slope_2'] = seg2_slope
+
+        results.append(node_result)
+
+    return pd.DataFrame(results)
+
+def plot_node_reg_2segs_fixed(gdf, node_id, node_col='node_id'):
+    """
+    Plots the observed data and fitted regression for a specific node_id.
+
+    Works with the output of the fixed_huber_piecewise_aic() function.
+
+    Parameters:
+    - gdf: Merged GeoDataFrame or DataFrame that includes both the original observations
+            (columns: 'width', 'wse') and the regression results.
+    - node_id: The specific node_id to plot.
+    - node_col: The column name used for node identification (default 'node_id').
+    """
+    subset = gdf[gdf[node_col] == node_id].copy()
+    if subset.empty:
+        print(f"No data found for node_id: {node_id}")
+        return
+
+    subset.sort_values(by='width', inplace=True)
+    x_obs = subset['width'].values
+    y_obs = subset['wse'].values
+    model_type = subset['model_type'].iloc[0]
+
+    plt.figure(figsize=(10, 6))
+    plt.scatter(x_obs, y_obs, color='blue', label='Observed data')
+
+    if model_type == 'simple':
+        seg1_int = subset['final_intercept_1'].iloc[0]
+        seg1_slope = subset['final_slope_1'].iloc[0]
+        x_line = np.linspace(np.min(x_obs), np.max(x_obs), 200)
+        y_line = seg1_int + seg1_slope * x_line
+        plt.plot(x_line, y_line, color='red',
+                label=f"Simple model: intercept = {seg1_int:.2f}, slope = {seg1_slope:.2f}")
+
+    elif model_type == 'one_breakpoint':
+        bp = subset['breakpoint'].iloc[0]
+        seg1_int = subset['final_intercept_1'].iloc[0]
+        seg1_slope = subset['final_slope_1'].iloc[0]
+        seg2_int = subset['final_intercept_2'].iloc[0]
+        seg2_slope = subset['final_slope_2'].iloc[0]
+
+        x_line_seg1 = np.linspace(np.min(x_obs), bp, 100)
+        y_line_seg1 = seg1_int + seg1_slope * x_line_seg1
+        x_line_seg2 = np.linspace(bp, np.max(x_obs), 100)
+        y_line_seg2 = seg2_int + seg2_slope * x_line_seg2
+
+        plt.plot(x_line_seg1, y_line_seg1, color='red',
+                label=f"Segment 1 (x ≤ {bp:.2f}): intercept = {seg1_int:.2f}, slope = {seg1_slope:.2f}")
+        plt.plot(x_line_seg2, y_line_seg2, color='green',
+                label=f"Segment 2 (x > {bp:.2f}): intercept = {seg2_int:.2f}, slope = {seg2_slope:.2f}")
+        plt.axvline(x=bp, color='purple', linestyle='--', label=f"Breakpoint: {bp:.2f}")
+
+    plt.xlabel("Width")
+    plt.ylabel("WSE")
+    plt.title(f"Regression for node_id: {node_id} ({model_type})")
+    plt.legend()
+    plt.grid(True)
     plt.tight_layout()
     plt.show()
-    
-    # Return results
-    report = {
-        "Node": node_id,
-        "Spearman_Correlation": round(spearman_corr, 3),
-        "Spearman_p_value": round(spearman_p_value, 3),
-        "Pearson_Correlation": round(pearson_corr, 3),
-        "Pearson_p_value": round(pearson_p_value, 3),
-        "Slope": slope,
-        "Intercept": intercept,
-        "R_squared": r_squared,
-    }
-    
-    return report
 
-def pw_l_regression_node(
-    river, 
-    node_id=None, 
-    min_spearman=None, 
-    min_obs=0, 
-    show_p_value=True, 
-    min_p_value=0.05
-):
+# Huber adaptative regression with AIC
+def compute_aic(rss, n, k):
+    return n * np.log(rss / n) + 2 * k
+
+def adaptive_huber_fit(X, y):
     """
-    Generates a hypsometric scatter plot with piece-wise linear regression for a specific river node,
-    or multiple plots if no node_id is provided. Includes a residuals plot.
-
-    Args:
-        river (dict): Dictionary containing node data with 'width' and 'wse' keys.
-        node_id (str or None): Specific node to plot. If None, plots nodes based on 
-                            random selection or threshold criteria.
-        min_spearman (float or None): Minimum Spearman correlation value to include a node in the plot.
-                                    If None, plots are divided equally above and below a Spearman value of 0.4.
-        min_obs (int): Minimum number of observations required to display a scatter plot for a node (default: 10).
-        show_p_value (bool): If True, displays the p-value on the scatter plot (default: True).
-        min_p_value (float): Minimum p-value required to include a node in the plot (default: 0.05).
+    Fit a Huber regression with an adaptive epsilon.
+    The epsilon is chosen based on the residual distribution from an OLS fit:
+      - If the proportion of residuals beyond 2*std is ≤ 5% (nearly normal),
+        then epsilon is set to 1.5 so that Huber behaves like OLS.
+      - If the proportion is ≥ 15%, then epsilon is set to 1 (maximally robust).
+      - For intermediate cases, epsilon is linearly interpolated between 1.5 and 1.
     """
-
-    def piecewise_fit(x, y):
-        """Find the optimal breakpoint for piecewise linear regression."""
-        def piecewise_model(params):
-            # Breakpoint, slope1, slope2, intercept
-            breakpoint, slope1, slope2, intercept = params
-            y_pred = np.where(
-                x <= breakpoint,
-                slope1 * x + intercept,
-                slope2 * (x - breakpoint) + (slope1 * breakpoint + intercept)
-            )
-            return np.sum((y - y_pred) ** 2)
-
-        # Initial guesses: midpoint as breakpoint, slopes, and intercept
-        init_params = [
-            np.median(x),  # Breakpoint
-            (y[-1] - y[0]) / (x[-1] - x[0]),  # Slope1
-            (y[-1] - y[0]) / (x[-1] - x[0]),  # Slope2
-            np.mean(y)  # Intercept
-        ]
-        bounds = [
-            (x.min(), x.max()),  # Breakpoint
-            (-np.inf, np.inf),   # Slope1
-            (-np.inf, np.inf),   # Slope2
-            (-np.inf, np.inf)    # Intercept
-        ]
-        result = minimize(piecewise_model, init_params, bounds=bounds)
-        return result.x  # Optimal parameters
-
-    def plot_node(node_id, node_data):
-        # Data preparation
-        width = np.array(node_data['width'])
-        wse = np.array(node_data['wse'])
-
-        # Fit piecewise model
-        breakpoint, slope1, slope2, intercept = piecewise_fit(width, wse)
-
-        # Calculate R²
-        segment1 = slope1 * width[width <= breakpoint] + intercept
-        segment2 = slope2 * (width[width > breakpoint] - breakpoint) + (slope1 * breakpoint + intercept)
-        y_pred = np.concatenate([segment1, segment2])
-        r2 = 1 - np.sum((wse - y_pred) ** 2) / np.sum((wse - np.mean(wse)) ** 2)
-
-        # Residuals
-        residuals = wse - y_pred
-
-        # Spearman correlation
-        spearman_corr, p_value = scipy.stats.spearmanr(width, wse)
-
-        # Plot scatter and residuals
-        fig, axes = plt.subplots(1, 2, figsize=(12, 6), gridspec_kw={'width_ratios': [2, 1]})
+    # Initial OLS fit to assess residual distribution
+    ols = LinearRegression()
+    ols.fit(X, y)
+    y_pred_ols = ols.predict(X)
+    residuals_ols = y - y_pred_ols
+    std_res = np.std(residuals_ols, ddof=1)
+    
+    # Compute proportion of residuals that are "extreme"
+    p_outliers = np.mean(np.abs(residuals_ols) > 2 * std_res)
+    
+    # Adaptive epsilon between 1.5 (OLS-like) and 1 (robust)
+    if p_outliers <= 0.05:
+        eps = 1.5
+    elif p_outliers >= 0.15:
+        eps = 1.0
+    else:
+        # Linear interpolation between 1.5 and 1.0 for 0.05 < p_outliers < 0.15
+        eps = 1.5 - ((p_outliers - 0.05) / (0.15 - 0.05)) * 0.5
         
-        # Scatter plot with regression
-        ax1 = axes[0]
-        ax1.scatter(width, wse, alpha=0.8, c="darkcyan", edgecolors='cyan', linewidths=1)
-        x_segment1 = np.linspace(width.min(), breakpoint, 100)
-        x_segment2 = np.linspace(breakpoint, width.max(), 100)
-        y_segment1 = slope1 * x_segment1 + intercept
-        y_segment2 = slope2 * (x_segment2 - breakpoint) + (slope1 * breakpoint + intercept)
-        ax1.plot(x_segment1, y_segment1, color="blue", label=f"Segment 1: y = {slope1:.3f}x + {intercept:.3f}")
-        ax1.plot(x_segment2, y_segment2, color="orange", label=f"Segment 2: y = {slope2:.3f}(x-{breakpoint:.3f}) + {slope1 * breakpoint + intercept:.3f}")
-        ax1.set_title(f"Node: {node_id}\nR²: {r2:.2f}, Spearman: {spearman_corr:.2f}", fontsize=12)
-        ax1.set_xlabel("Width")
-        ax1.set_ylabel("WSE")
-        ax1.legend()
-        if show_p_value:
-            ax1.text(0.05, 0.85, f"p-value: {p_value:.3f}", ha='left', va='center', transform=ax1.transAxes, fontsize=10, color="gray")
-        ax1.grid(alpha=0.3)
+    # Fit the HuberRegressor with the computed epsilon
+    model = HuberRegressor(epsilon=eps, max_iter=500)
+    model.fit(X, y)
+    y_pred = model.predict(X)
+    residuals = y - y_pred
+    return model, y_pred, residuals
 
-        # Residuals plot
-        ax2 = axes[1]
-        ax2.scatter(width, residuals, alpha=0.8, c="darkred", edgecolors='white', linewidths=1)
-        ax2.axhline(0, color="black", linestyle="--", linewidth=1)
-        ax2.set_title("Residuals")
-        ax2.set_xlabel("Width")
-        ax2.set_ylabel("Residuals")
-        ax2.grid(alpha=0.3)
+def adaptive_huber_piecewise_aic(river_dict):
+    """
+    Apply adaptive-epsilon Huber regression to a dictionary of river nodes.
+    Returns a DataFrame summarizing model type and parameters per node.
+    """
+    results = []
 
-        plt.tight_layout()
-        plt.show()
+    for node_id, node_data in river_dict.items():
+        x = np.array(node_data['width'])
+        y = np.array(node_data['wse'])
+        n = len(x)
 
-        return {
-            'Node': node_id,
-            'Breakpoint': round(breakpoint, 3),
-            'Slope1': round(slope1, 3),
-            'Slope2': round(slope2, 3),
-            'Intercept': round(intercept, 3),
-            'R2': round(r2, 3),
-            'Spearman': round(spearman_corr, 3),
-            'p_value': round(p_value, 3)
+        if n < 3:
+            continue
+
+        node_result = {
+            'node_id': node_id,  # Node identifier
+            'model_type': None,
+            'h0': np.nan, 'h1': np.nan, 'h2': np.nan, 'h3': np.nan,
+            'breakpoint': np.nan,
+            'AIC': np.nan,
+            'final_intercept_1': np.nan, 'final_slope_1': np.nan,
+            'final_intercept_2': np.nan, 'final_slope_2': np.nan
         }
 
-    results = []
-    if node_id:
-        node_data = river[node_id]
-        if len(node_data['width']) < min_obs:
-            raise ValueError(f"Node {node_id} does not have enough observations (min_obs={min_obs}).")
-        results.append(plot_node(node_id, node_data))
-    else:
-        for nid, node_data in river.items():
-            if len(node_data['width']) < min_obs:
-                continue
-            results.append(plot_node(nid, node_data))
-    return pd.DataFrame(results).round(3)
+        # 1. Simple Linear Regression with adaptive Huber
+        X_simple = x.reshape(-1, 1)
+        try:
+            model_simple, y_pred_simple, residuals_simple = adaptive_huber_fit(X_simple, y)
+        except Exception:
+            continue
 
+        rss_simple = np.sum(residuals_simple ** 2)
+        aic_simple = compute_aic(rss_simple, n, 2)
 
-def pw_l_regression_huber_node(
-    river, 
-    node_id=None, 
-    min_spearman=None, 
-    min_obs=1, 
-    show_p_value=True, 
-    min_p_value=None,
-    delta=1.345  # Default delta for Huber loss
-):
-    """
-    Generates a hypsometric scatter plot with piece-wise linear regression for a specific river node,
-    or multiple plots if no node_id is provided. Also includes a residuals plot.
-    """
-
-    def huber_loss(residuals, delta):
-        """Huber loss function."""
-        abs_residuals = np.abs(residuals)
-        return np.where(
-            abs_residuals <= delta,
-            0.5 * residuals**2,
-            delta * (abs_residuals - 0.5 * delta)
-        )
-    
-    def piecewise_huber_loss(params, x, y, delta):
-        """Piecewise linear model with Huber loss."""
-        breakpoint, slope1, slope2, intercept = params
-        y_pred = np.where(
-            x <= breakpoint,
-            slope1 * x + intercept,
-            slope2 * (x - breakpoint) + (slope1 * breakpoint + intercept)
-        )
-        residuals = y - y_pred
-        return np.sum(huber_loss(residuals, delta))
-
-    def piecewise_fit_huber(x, y, delta):
-        """Find the optimal breakpoint for piecewise linear regression with Huber loss."""
-        init_params = [
-            np.median(x),  # Breakpoint
-            (y[-1] - y[0]) / (x[-1] - x[0]),  # Slope1
-            (y[-1] - y[0]) / (x[-1] - x[0]),  # Slope2
-            np.mean(y)  # Intercept
-        ]
-        bounds = [
-            (x.min(), x.max()),  # Breakpoint
-            (-np.inf, np.inf),   # Slope1
-            (-np.inf, np.inf),   # Slope2
-            (-np.inf, np.inf)    # Intercept
-        ]
-        result = minimize(piecewise_huber_loss, init_params, args=(x, y, delta), bounds=bounds)
-        return result.x
-
-    def plot_node(node_id, node_data, delta):
-        # Data preparation
-        width = np.array(node_data['width'])
-        wse = np.array(node_data['wse'])
-
-        # Fit piecewise model with Huber loss
-        breakpoint, slope1, slope2, intercept = piecewise_fit_huber(width, wse, delta)
-
-        # Calculate predicted values and residuals
-        segment1 = slope1 * width[width <= breakpoint] + intercept
-        segment2 = slope2 * (width[width > breakpoint] - breakpoint) + (slope1 * breakpoint + intercept)
-        y_pred = np.concatenate([segment1, segment2])
-        residuals = wse - y_pred
-        
-        # Pseudo-R²
-        mad_y = np.median(np.abs(wse - np.median(wse)))
-        mad_residuals = np.median(np.abs(residuals))
-        r2_pseudo = 1 - (mad_residuals / mad_y)**2 if mad_y > 0 else 0
-        r2_pseudo = max(0, r2_pseudo)  # Avoid negative R² due to numerical issues
-
-        # Spearman correlation
-        spearman_corr, p_value = scipy.stats.spearmanr(width, wse)
-
-        # Plot scatter plot and residuals side by side
-        fig, axes = plt.subplots(1, 2, figsize=(14, 6), gridspec_kw={'width_ratios': [2, 1]})
-        
-        # Scatter plot with regression
-        axes[0].scatter(width, wse, alpha=0.8, c="darkcyan", edgecolors='cyan', linewidths=1)
-        x_segment1 = np.linspace(width.min(), breakpoint, 100)
-        x_segment2 = np.linspace(breakpoint, width.max(), 100)
-        y_segment1 = slope1 * x_segment1 + intercept
-        y_segment2 = slope2 * (x_segment2 - breakpoint) + (slope1 * breakpoint + intercept)
-        axes[0].plot(x_segment1, y_segment1, color="blue", label=f"Segment 1: y = {slope1:.3f}x + {intercept:.3f}")
-        axes[0].plot(x_segment2, y_segment2, color="orange", label=f"Segment 2: y = {slope2:.3f}(x-{breakpoint:.3f}) + {slope1 * breakpoint + intercept:.3f}")
-        axes[0].set_title(f"Node: {node_id}\n$R^2_{{pseudo}}$: {r2_pseudo:.2f}, Spearman: {spearman_corr:.2f}")
-        axes[0].set_xlabel("Width")
-        axes[0].set_ylabel("WSE")
-        axes[0].legend()
-        if show_p_value:
-            axes[0].text(0.05, 0.85, f"p-value: {p_value:.3f}", ha='left', va='center', transform=axes[0].transAxes, fontsize=10, color="gray")
-
-        # Residuals plot
-        axes[1].scatter(width, residuals, alpha=0.8, c="red", edgecolors='black', linewidths=0.5)
-        axes[1].axhline(0, color="black", linestyle="--", linewidth=1)
-        axes[1].set_title("Residuals Plot")
-        axes[1].set_xlabel("Width")
-        axes[1].set_ylabel("Residuals")
-
-        plt.tight_layout()
-        plt.show()
-
-        return {
-            'Node': node_id,
-            'Breakpoint': round(breakpoint, 3),
-            'Slope1': round(slope1, 3),
-            'Slope2': round(slope2, 3),
-            'Intercept': round(intercept, 3),
-            'R2_pseudo': round(r2_pseudo, 3),
-            'Spearman': round(spearman_corr, 3),
-            'p_value': round(p_value, 3)
+        best_model = {
+            'type': 'simple',
+            'AIC': aic_simple,
+            'model': model_simple,
+            'pred': y_pred_simple,
+            'breakpoint': None,
+            'h0': model_simple.intercept_,
+            'h1': model_simple.coef_[0],
+            'h2': 0,
+            'h3': 0
         }
 
-    results = []
-    if node_id:
-        node_data = river[node_id]
-        if len(node_data['width']) < min_obs:
-            raise ValueError(f"Node {node_id} does not have enough observations (min_obs={min_obs}).")
-        
-        if min_spearman is not None or min_p_value is not None:
-            spearman_corr, p_value = scipy.stats.spearmanr(node_data['width'], node_data['wse'])
-            if min_spearman is not None and spearman_corr < min_spearman:
-                return pd.DataFrame(results)
-            if min_p_value is not None and p_value > min_p_value:
-                return pd.DataFrame(results)
+        # 2. One-Breakpoint Piecewise Linear Regression
+        candidate_breakpoints = np.unique(x)[1:-1]
+        for bp in candidate_breakpoints:
+            left_count = np.sum(x <= bp)
+            right_count = np.sum(x > bp)
 
-        results.append(plot_node(node_id, node_data, delta))
-    else:
-        for nid, node_data in river.items():
-            if len(node_data['width']) < min_obs:
+            if 10 <= n <= 15 and (left_count < 5 or right_count < 5):
                 continue
-            
-            if min_spearman is not None or min_p_value is not None:
-                spearman_corr, p_value = scipy.stats.spearmanr(node_data['width'], node_data['wse'])
-                if min_spearman is not None and spearman_corr < min_spearman:
-                    continue
-                if min_p_value is not None and p_value > min_p_value:
-                    continue
-            
-            results.append(plot_node(nid, node_data, delta))
+            elif n >= 16 and (left_count < 0.3 * n or right_count < 0.3 * n):
+                continue
 
-    return pd.DataFrame(results).round(3)
+            X_piecewise = np.column_stack([x, np.maximum(0, x - bp)])
+
+            try:
+                model_pw, y_pred_pw, residuals_pw = adaptive_huber_fit(X_piecewise, y)
+            except Exception:
+                continue
+
+            h0 = model_pw.intercept_
+            h1 = model_pw.coef_[0]
+            delta = model_pw.coef_[1]
+            h2 = h1 + delta
+
+            # Reject models with small slope changes or unrealistic slopes
+            if abs(h2 - h1) < 0.08:
+                continue
+            if h1 < 0 or h2 < 0:
+                continue
+            if 0.9 <= h1 <= 1.0 and 0.9 <= h2 <= 1.0:
+                continue
+            if abs(delta * bp) < 0.6:
+                continue
+
+            rss_pw = np.sum(residuals_pw ** 2)
+            aic_pw = compute_aic(rss_pw, n, 3)
+
+            if aic_pw < best_model['AIC']:
+                best_model = {
+                    'type': 'one_breakpoint',
+                    'AIC': aic_pw,
+                    'model': model_pw,
+                    'pred': y_pred_pw,
+                    'breakpoint': bp,
+                    'h0': h0,
+                    'h1': h1,
+                    'h2': h2,
+                    'h3': delta
+                }
+
+        # Fill in results for the node
+        node_result.update({
+            'model_type': best_model['type'],
+            'h0': best_model['h0'],
+            'h1': best_model['h1'],
+            'h2': best_model['h2'],
+            'h3': best_model['h3'],
+            'breakpoint': best_model['breakpoint'],
+            'AIC': best_model['AIC'],
+            'initial_slope_2': best_model['h1']
+        })
+
+        if best_model['type'] == 'simple':
+            node_result['final_intercept_1'] = best_model['h0']
+            node_result['final_slope_1'] = best_model['h1']
+        else:
+            seg1_int = best_model['h0']
+            seg1_slope = best_model['h1']
+            seg2_slope = best_model['h2']
+            seg2_int = best_model['h0'] - (best_model['h2'] - best_model['h1']) * best_model['breakpoint']
+            node_result['final_intercept_1'] = seg1_int
+            node_result['final_slope_1'] = seg1_slope
+            node_result['final_intercept_2'] = seg2_int
+            node_result['final_slope_2'] = seg2_slope
+
+        results.append(node_result)
+
+    return pd.DataFrame(results)
