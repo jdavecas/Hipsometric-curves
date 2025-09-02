@@ -1,0 +1,15 @@
+# Ignore everything
+*
+
+# But do not ignore gitignore itself
+!.gitignore
+
+# Do not ignore Python / notebooks / docs
+!*.py
+!*.ipynb
+!*.md
+
+# Local-only config (should stay private)
+config_paths.py
+.env
+
