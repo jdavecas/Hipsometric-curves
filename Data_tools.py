@@ -103,17 +103,21 @@ def resampling(input_raster, output_raster, scale_factor):
 """CVS to Parquet conversion using DuckDB"""
 
 def csv_to_parquet(in_csv, out_parquet):
-    con = duckdb.connect()  # create a connection
-    con.execute("""
+    con = duckdb.connect()
+
+    query = f"""
         COPY (
             SELECT *
-            FROM read_csv_auto(?)
+            FROM read_csv_auto('{in_csv}')
         )
-        TO ?
+        TO '{out_parquet}'
         (FORMAT PARQUET, COMPRESSION ZSTD);
-    """, [in_csv, out_parquet])
+    """
+
+    con.execute(query)
     con.close()
-    print(f" Wrote: {out_parquet}")
+    print(f"✅ Wrote: {out_parquet}")
+
 
 ##################################################################################################
 #################################################
