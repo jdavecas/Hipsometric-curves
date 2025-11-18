@@ -21,7 +21,6 @@ from rasterio.warp import calculate_default_transform, reproject
 from affine import Affine
 import duckdb
 
-
 ###################################################################################################################################################
 ###################################################################################################################################################
 
@@ -350,3 +349,49 @@ def merge_slope_to_nodes(parquet_path, shp_path, out_path):
     print(f" Total rows written: {len(gdf_merged):,}")
 
     return gdf_merged
+
+##################################################################################################
+#################################################
+#################################################
+"""parquet to shapefile conversion using GeoPandas"""
+
+
+def parquet_to_shapefile(in_parquet, out_shp, crs="EPSG:4326"):
+    """
+    Convert a Parquet file with 'lon' and 'lat' columns to a Shapefile.
+
+    Parameters
+    ----------
+    in_parquet : str or Path
+        Path to input .parquet file
+    out_shp : str or Path
+        Path to output .shp file
+    crs : str, optional
+        CRS to assign to the output (default: EPSG:4326)
+    """
+    in_parquet = Path(in_parquet)
+    out_shp = Path(out_shp)
+
+    # Read as a normal table (no geo metadata expected)
+    df = pd.read_parquet(in_parquet)
+
+    # Check that lon/lat exist
+    if not {"lon", "lat"}.issubset(df.columns):
+        raise ValueError(
+            f"Input parquet must have 'lon' and 'lat' columns. "
+            f"Found columns: {list(df.columns)}"
+        )
+
+    # Build point geometry from lon (x) and lat (y)
+    gdf = gpd.GeoDataFrame(
+        df,
+        geometry=gpd.points_from_xy(df["lon"], df["lat"]),
+        crs=crs,
+    )
+
+    # Ensure output directory exists
+    out_shp.parent.mkdir(parents=True, exist_ok=True)
+
+    # Write to Shapefile
+    gdf.to_file(out_shp)
+    print("✔ Saved:", out_shp)
