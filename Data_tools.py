@@ -192,32 +192,13 @@ def merge_shapefiles(folder, output_shapefile, target_epsg=None):
 ##################################################################################################
 #################################################
 #################################################
-"""shapefile to parquet conversion using DuckDB"""
+import os
+import duckdb
 
 def shapefile_to_parquet(in_shapefile, out_parquet, to_epsg=None,
                          overwrite="raise", partition_by=None, compression="ZSTD"):
     """
     Convert a Shapefile to GeoParquet using DuckDB Spatial.
-
-    Parameters
-    ----------
-    in_shapefile : str | Path
-        Path to .shp
-    out_parquet : str | Path
-        Path to .parquet (or a directory if using partition_by)
-    to_epsg : int | None
-        Reproject geometry to this EPSG (e.g., 4326). If None, keep source CRS.
-    overwrite : {'raise','overwrite','ignore'}
-        Behavior if output exists: error, overwrite, or skip writing.
-    partition_by : list[str] | None
-        Write partitioned GeoParquet (directory output) by these column(s).
-    compression : {'ZSTD','SNAPPY','GZIP',...}
-        Parquet compression codec.
-
-    Returns
-    -------
-    str
-        The output path (or directory).
     """
     in_shapefile = str(in_shapefile)
     out_parquet = str(out_parquet)
@@ -244,16 +225,21 @@ def shapefile_to_parquet(in_shapefile, out_parquet, to_epsg=None,
                 print(f"⚠️ Output dir non-empty, skipping (ignore): {out_parquet}")
                 return out_parquet
 
+    # Escape single quotes in paths for SQL safety
+    shp_escaped = in_shapefile.replace("'", "''")
+    out_escaped = out_parquet.replace("'", "''")
+
     con = duckdb.connect()
     try:
         con.execute("INSTALL spatial; LOAD spatial;")
 
         # Build COPY options
         copy_opts = [f"FORMAT PARQUET", f"COMPRESSION {compression}"]
-        if overwrite in ("overwrite",):
-            copy_opts.append("OVERWRITE_OR_IGNORE TRUE")  # overwrite if exists
-        elif overwrite in ("ignore",):
-            copy_opts.append("OVERWRITE_OR_IGNORE TRUE")  # will no-op if exists
+
+        if overwrite in ("overwrite", "ignore"):
+            # This option makes COPY overwrite existing files (or no-op if they match)
+            copy_opts.append("OVERWRITE_OR_IGNORE TRUE")
+
         if partition_by:
             cols = ", ".join(partition_by)
             copy_opts.append(f"PARTITION_BY ({cols})")
@@ -263,32 +249,31 @@ def shapefile_to_parquet(in_shapefile, out_parquet, to_epsg=None,
         if to_epsg is None:
             sql = f"""
                 COPY (
-                    SELECT * FROM ST_Read(?)
+                    SELECT * FROM ST_Read('{shp_escaped}')
                 )
-                TO ?
+                TO '{out_escaped}'
                 ({copy_clause});
             """
-            params = [in_shapefile, out_parquet]
         else:
-            # Transform geometry and avoid duplicate geom column
+            epsg_int = int(to_epsg)
             sql = f"""
                 COPY (
                     SELECT
-                        ST_Transform(geom, ?) AS geom,
+                        ST_Transform(geom, {epsg_int}) AS geom,
                         * EXCLUDE geom
-                    FROM ST_Read(?)
+                    FROM ST_Read('{shp_escaped}')
                 )
-                TO ?
+                TO '{out_escaped}'
                 ({copy_clause});
             """
-            params = [int(to_epsg), in_shapefile, out_parquet]
 
-        con.execute(sql, params)
+        con.execute(sql)
         print(f"✅ Wrote GeoParquet → {out_parquet}")
         return out_parquet
 
     finally:
         con.close()
+
 
 ##################################################################################################
 #################################################
